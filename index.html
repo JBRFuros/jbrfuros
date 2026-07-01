@@ -509,11 +509,11 @@ async function consultarCNPJ(){
   status.textContent='Consultando Receita Federal...';
 
   try{
-    const res=await fetch(`https://brasilapi.com.br/api/cnpj/v1/${input}`);
+    const res=await fetch(`https://publica.cnpj.ws/cnpj/${input}`);
     if(!res.ok)throw new Error('not found');
     const data=await res.json();
     cnpjDadosReceita=data;
-    const situacao=data.descricao_situacao_cadastral||'';
+    const situacao=data.estabelecimento?.situacao_cadastral||'';
     const razao=data.razao_social||'';
     if(situacao.toUpperCase()==='ATIVA'){
       status.style.background='#eaf3de';status.style.color='#27500A';status.style.border='1px solid #97c459';

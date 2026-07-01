@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>JBR Furos – Painel Administrativo</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ",
+    authDomain: "jbr-furos.firebaseapp.com",
+    projectId: "jbr-furos",
+    storageBucket: "jbr-furos.firebasestorage.app",
+    messagingSenderId: "949608635518",
+    appId: "1:949608635518:web:13812724ca2276c80fcc2f"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window._fbDb = db;
+  window._fbCollection = collection;
+  window._fbGetDocs = getDocs;
+  window._fbDoc = doc;
+  window._fbUpdateDoc = updateDoc;
+  window._fbDeleteDoc = deleteDoc;
+  window._fbQuery = query;
+  window._fbOrderBy = orderBy;
+
+  // Carregar orçamentos do Firestore ao iniciar
+  async function carregarDoFirestore(){
+    try{
+      const q = window._fbQuery(window._fbCollection(db,'orcamentos'), window._fbOrderBy('data','desc'));
+      const snap = await window._fbGetDocs(q);
+      const data = [];
+      snap.forEach(d => data.push({...d.data(), _docId: d.id}));
+      localStorage.setItem('jbr_emails', JSON.stringify(data));
+      console.log('Firestore: '+data.length+' orçamentos carregados');
+      if(window._adminLogado) { renderStats(); renderTabela(); renderEmails(); }
+    } catch(e){
+      console.error('Erro ao carregar Firestore:', e);
+    }
+  }
+
+  window._carregarDoFirestore = carregarDoFirestore;
+  window._salvarNoFirestore = async function(data){
+    // Sincronizar todas as alterações de volta para o Firestore
+    for(const o of data){
+      if(o._docId){
+        try{
+          const ref = window._fbDoc(db,'orcamentos',o._docId);
+          const {_docId,...dadosSemId} = o;
+          await window._fbUpdateDoc(ref, dadosSemId);
+        } catch(e){ console.error('Erro ao atualizar:', e); }
+      }
+    }
+  };
+
+  window._excluirDoFirestore = async function(docId){
+    if(!docId) return;
+    try{
+      await window._fbDeleteDoc(window._fbDoc(db,'orcamentos',docId));
+    } catch(e){ console.error('Erro ao excluir:', e); }
+  };
+
+  document.addEventListener('DOMContentLoaded', ()=>{
+    if(window._adminLogado) carregarDoFirestore();
+    else window._fbPendingLoad = true;
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>
+(function(){
+  const KEY='5SSLB95F3P6xEOY-V';
+  if(typeof emailjs!=='undefined') emailjs.init({publicKey:KEY});
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{--or:#C95227;--or2:#914531;--d2:#2D3A39;--cr:#E5DED4;}
+body{font-family:'Inter',sans-serif;background:#f0ebe3;min-height:100vh;}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;background:#2D3A39;display:flex;align-items:center;justify-content:center;z-index:1000;}
+.login-box{background:#fff;border-radius:14px;padding:2.5rem;width:340px;text-align:center;}
+.login-logo{font-family:'Bebas Neue',sans-serif;font-size:28px;color:#C95227;margin-bottom:.25rem;}
+.login-sub{font-size:12px;color:#888;margin-bottom:1.75rem;letter-spacing:.5px;}
+.login-box input{width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;margin-bottom:.75rem;}
+.login-box input:focus{border-color:#C95227;}
+.btn-login{width:100%;background:#C95227;color:#fff;border:none;padding:12px;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1.5px;cursor:pointer;}
+.btn-login:hover{background:#914531;}
+#login-error{font-size:12px;color:#A32D2D;margin-top:.5rem;display:none;}
+
+/* APP */
+#app{display:none;}
+nav{background:#2D3A39;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 2rem;}
+.nav-brand{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#C95227;letter-spacing:1px;}
+.nav-brand span{color:rgba(229,222,212,.5);font-size:12px;font-family:'Inter',sans-serif;font-weight:400;margin-left:8px;}
+.btn-logout{background:transparent;color:rgba(229,222,212,.5);border:1px solid rgba(229,222,212,.2);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;}
+.btn-logout:hover{color:var(--cr);border-color:rgba(229,222,212,.4);}
+
+.container{max-width:1200px;margin:0 auto;padding:2rem;}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem;}
+.stat-card{background:#fff;border-radius:10px;border:.5px solid rgba(45,58,57,.12);padding:1.25rem;}
+.stat-label{font-size:11px;color:#888;letter-spacing:.5px;text-transform:uppercase;margin-bottom:.4rem;}
+.stat-val{font-family:'Bebas Neue',sans-serif;font-size:28px;color:#2D3A39;letter-spacing:1px;}
+.stat-val.orange{color:#C95227;}
+
+/* FILTROS */
+.filters{background:#fff;border-radius:10px;border:.5px solid rgba(45,58,57,.12);padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;}
+.filters input,.filters select{padding:8px 12px;border:1px solid #ddd;border-radius:7px;font-size:13px;font-family:'Inter',sans-serif;outline:none;}
+.filters input:focus,.filters select:focus{border-color:#C95227;}
+.filters label{font-size:12px;color:#666;font-weight:500;}
+.btn-export{background:#2D3A39;color:#E5DED4;border:none;padding:8px 16px;border-radius:7px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;margin-left:auto;}
+.btn-export:hover{background:#1c2a29;}
+
+/* TABELA */
+.table-wrap{background:#fff;border-radius:12px;border:.5px solid rgba(45,58,57,.12);overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead{background:#2D3A39;}
+thead th{padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#E5DED4;letter-spacing:.5px;text-transform:uppercase;}
+tbody tr{border-bottom:.5px solid #f0ebe3;transition:background .15s;}
+tbody tr:hover{background:#faf8f5;}
+tbody tr:last-child{border-bottom:none;}
+td{padding:11px 14px;font-size:12px;color:#333;}
+.badge-status{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;letter-spacing:.3px;}
+.badge-gerado{background:#e8f4fd;color:#185FA5;border:.5px solid #b5d4f4;}
+.badge-revisado{background:#fef8ee;color:#854F0B;border:.5px solid rgba(201,82,39,.3);}
+.badge-enviado{background:#eaf3de;color:#27500A;border:.5px solid #97c459;}
+
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:500;padding:1rem;}
+.modal-bg.show{display:flex;}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;}
+.modal-header{background:#2D3A39;padding:1.25rem 1.5rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;}
+.modal-title{font-family:'Bebas Neue',sans-serif;font-size:18px;color:#E5DED4;letter-spacing:1px;}
+.modal-close{background:transparent;border:none;color:rgba(229,222,212,.6);font-size:20px;cursor:pointer;}
+.modal-body{padding:1.5rem;}
+.modal-section{margin-bottom:1.25rem;}
+.modal-section-title{font-size:11px;font-weight:600;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:.6rem;}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;}
+.info-item{background:#f7f4ef;border-radius:7px;padding:.6rem .85rem;}
+.info-label{font-size:10px;color:#888;letter-spacing:.3px;text-transform:uppercase;margin-bottom:2px;}
+.info-val{font-size:13px;color:#2D3A39;font-weight:500;}
+
+/* DESCONTO */
+.desconto-box{background:#fff8f5;border:1px solid rgba(201,82,39,.2);border-radius:10px;padding:1.25rem;}
+.desconto-title{font-family:'Bebas Neue',sans-serif;font-size:16px;color:#C95227;letter-spacing:1px;margin-bottom:.85rem;}
+.desconto-row{display:flex;gap:.75rem;align-items:flex-end;}
+.fg{display:flex;flex-direction:column;gap:4px;flex:1;}
+.fg label{font-size:11px;font-weight:500;color:#555;letter-spacing:.3px;text-transform:uppercase;}
+.fg input,.fg select{padding:9px 12px;border:1px solid #ddd;border-radius:7px;font-size:13px;font-family:'Inter',sans-serif;outline:none;}
+.fg input:focus,.fg select:focus{border-color:#C95227;}
+.total-preview{background:#2D3A39;border-radius:8px;padding:.85rem 1rem;margin-top:.85rem;display:flex;justify-content:space-between;align-items:center;}
+.total-preview-label{color:rgba(229,222,212,.6);font-size:12px;}
+.total-preview-val{font-family:'Bebas Neue',sans-serif;font-size:22px;color:#f0a500;letter-spacing:1px;}
+.desconto-info{font-size:11px;color:#888;margin-top:.5rem;}
+
+.btn-row{display:flex;gap:.65rem;margin-top:1.25rem;}
+.btn-pdf{background:#C95227;color:#fff;border:none;padding:11px 20px;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;cursor:pointer;flex:1;}
+.btn-pdf:hover{background:#914531;}
+.btn-enviar{background:#25D366;color:#fff;border:none;padding:11px 20px;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;cursor:pointer;flex:1;}
+.btn-cancelar{background:transparent;color:#666;border:1px solid #ddd;padding:11px 20px;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;cursor:pointer;}
+
+/* EMAIL DB */
+.email-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:.5rem;}
+.email-table th{background:#f0ebe3;color:#555;padding:8px 12px;text-align:left;font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;}
+.email-table td{padding:8px 12px;border-bottom:.5px solid #f0ebe3;color:#333;}
+.empty-state{text-align:center;padding:3rem;color:#aaa;}
+.empty-state i{font-size:40px;display:block;margin-bottom:.75rem;}
+
+.tab-nav{display:flex;gap:4px;margin-bottom:1.25rem;}
+.tab-btn{padding:9px 20px;border-radius:8px;border:.5px solid rgba(45,58,57,.2);background:#fff;color:#555;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;}
+.tab-btn.active{background:#2D3A39;color:#E5DED4;border-color:#2D3A39;}
+.tab-content{display:none;} .tab-content.show{display:block;}
+
+.action-btn{background:transparent;border:.5px solid rgba(45,58,57,.2);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;color:#555;transition:all .15s;}
+.action-btn:hover{background:#2D3A39;color:#fff;border-color:#2D3A39;}
+.action-btn.orange:hover{background:#C95227;color:#fff;border-color:#C95227;}
+</style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18269922593"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'AW-18269922593');
+</script>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">JBR FUROS</div>
+    <div class="login-sub">PAINEL ADMINISTRATIVO</div>
+    <input type="text" id="login-user" placeholder="Usuário" autocomplete="off"/>
+    <input type="password" id="login-pass" placeholder="Senha" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <button class="btn-login" onclick="doLogin()">Entrar</button>
+    <div id="login-error">Usuário ou senha incorretos.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <nav>
+    <div class="nav-brand">JBR FUROS <span>Painel Administrativo</span></div>
+    <button class="btn-logout" onclick="logout()">Sair</button>
+  </nav>
+
+  <div class="container">
+
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab('orcamentos',this)">Orçamentos</button>
+      <button class="tab-btn" onclick="switchTab('emails',this)">Banco de E-mails</button>
+    </div>
+
+    <!-- ORÇAMENTOS -->
+    <div class="tab-content show" id="tab-orcamentos">
+      <div class="stats" id="stats-bar"></div>
+
+      <div class="filters">
+        <label>Buscar:</label>
+        <input type="text" id="busca" placeholder="Nome, empresa, CNPJ ou nº orçamento..." oninput="renderTabela()" style="min-width:260px;"/>
+        <label>Status:</label>
+        <select id="filtro-status" onchange="renderTabela()">
+          <option value="">Todos</option>
+          <option value="gerado">Gerado</option>
+          <option value="revisado">Revisado</option>
+          <option value="enviado">Enviado</option>
+        </select>
+        <button class="btn-export" onclick="exportarCSV()">↓ Exportar CSV</button>
+        <button class="btn-export" style="background:#A32D2D;" onclick="limparTodosOrcamentos()">🗑 Limpar todos</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nº Orçamento</th>
+              <th>Data</th>
+              <th>Empresa</th>
+              <th>Telefone</th>
+              <th>Município</th>
+              <th>Furos</th>
+              <th>Total original</th>
+              <th>Desconto</th>
+              <th>Total final</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-body"></tbody>
+        </table>
+        <div class="empty-state" id="empty-state" style="display:none;">
+          <i class="ti ti-file-off" aria-hidden="true"></i>
+          Nenhum orçamento encontrado.
+        </div>
+      </div>
+    </div>
+
+    <!-- BANCO DE EMAILS -->
+    <div class="tab-content" id="tab-emails">
+      <div class="filters">
+        <label>Buscar:</label>
+        <input type="text" id="busca-email" placeholder="Nome, empresa ou e-mail..." oninput="renderEmails()" style="min-width:260px;"/>
+        <button class="btn-export" onclick="exportarEmailsCSV()">↓ Exportar lista CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table class="email-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Empresa</th>
+              <th>CNPJ</th>
+              <th>Telefone</th>
+              <th>E-mail</th>
+              <th>Município</th>
+              <th>Data cadastro</th>
+              <th>Total orçado</th>
+            </tr>
+          </thead>
+          <tbody id="email-body"></tbody>
+        </table>
+        <div class="empty-state" id="empty-emails" style="display:none;">
+          <i class="ti ti-mail-off" aria-hidden="true"></i>
+          Nenhum e-mail cadastrado ainda.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL ORÇAMENTO -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Revisar Orçamento</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <div class="modal-section-title">Dados do cliente</div>
+        <div class="info-grid" id="modal-info"></div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Itens do orçamento</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#f0ebe3;"><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Diâmetro</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Tipo</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Prof.</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Qtd</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Unit/cm</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Subtotal</th></tr></thead>
+          <tbody id="modal-itens"></tbody>
+        </table>
+        <div id="modal-resumo" style="margin-top:.75rem;background:#f7f4ef;border-radius:8px;padding:.75rem 1rem;font-size:12px;color:#2D3A39;"></div>
+      </div>
+      <div class="modal-section">
+        <div class="desconto-box">
+          <div class="desconto-title">Aplicar desconto</div>
+          <div class="desconto-row">
+            <div class="fg">
+              <label>Tipo de desconto</label>
+              <select id="desc-tipo" onchange="calcDesconto()">
+                <option value="valor">Valor fixo (R$)</option>
+                <option value="percent">Percentual (%)</option>
+              </select>
+            </div>
+            <div class="fg">
+              <label id="desc-input-label">Valor do desconto (R$)</label>
+              <input type="number" id="desc-valor" placeholder="0,00" min="0" oninput="calcDesconto()"/>
+            </div>
+            <div class="fg" style="flex:0 0 auto;">
+              <label>Motivo</label>
+              <select id="desc-motivo">
+                <option value="negociação">Negociação comercial</option>
+                <option value="volume">Volume de serviço</option>
+                <option value="cliente">Cliente recorrente</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+            <div class="fg" style="flex:0 0 auto;max-width:130px;">
+              <label>Faturamento (DDL)</label>
+              <input type="number" id="desc-ddl" min="1" value="15" placeholder="15"/>
+            </div>
+          </div>
+          <div style="background:var(--color-background-secondary,#f7f4ef);border-radius:8px;padding:.6rem 1rem;margin-top:.75rem;display:flex;align-items:center;gap:10px;">
+            <i class="ti ti-git-branch" aria-hidden="true" style="color:#C95227;font-size:16px;"></i>
+            <span style="font-size:12px;color:#555;">Número da revisão: <strong id="desc-revisao-label">REV 1</strong></span>
+          </div>
+          <div class="total-preview">
+            <div>
+              <div class="total-preview-label">Total original: <span id="total-original" style="color:rgba(229,222,212,.5);text-decoration:line-through;font-size:13px;"></span></div>
+              <div class="total-preview-label" style="margin-top:2px;">Desconto aplicado: <span id="desconto-aplicado" style="color:#f0a500;font-size:13px;font-weight:600;"></span></div>
+            </div>
+            <div class="total-preview-val" id="total-final">R$ 0,00</div>
+          </div>
+          <div class="desconto-info" id="desconto-info"></div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-cancelar" onclick="closeModal()">Cancelar</button>
+        <button class="btn-pdf" onclick="gerarPDFAdmin()"><i class="ti ti-file-download" aria-hidden="true"></i> Baixar PDF revisado</button>
+        <button class="btn-enviar" onclick="marcarEnviado()"><i class="ti ti-check" aria-hidden="true"></i> Marcar como enviado</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SENHA_USER='jbr';
+const SENHA_PASS='jbr@2026';
+let orcAtual=null;
+
+function doLogin(){
+  const u=document.getElementById('login-user').value.trim();
+  const p=document.getElementById('login-pass').value;
+  if(u===SENHA_USER&&p===SENHA_PASS){
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').style.display='block';
+    window._adminLogado=true;
+    if(window._carregarDoFirestore){ window._carregarDoFirestore(); }
+    else { renderStats();renderTabela();renderEmails(); }
+  } else {
+    document.getElementById('login-error').style.display='block';
+  }
+}
+function logout(){document.getElementById('app').style.display='none';document.getElementById('login-screen').style.display='flex';}
+
+function getOrcamentos(){return JSON.parse(localStorage.getItem('jbr_emails')||'[]');}
+function saveOrcamentos(data){
+  localStorage.setItem('jbr_emails',JSON.stringify(data));
+  if(window._salvarNoFirestore) window._salvarNoFirestore(data);
+}
+
+function fmt(v){return 'R$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+function renderStats(){
+  const data=getOrcamentos();
+  const total=data.reduce((s,o)=>s+parseFloat(o.total||0),0);
+  const comDesc=data.filter(o=>parseFloat(o.desconto||0)>0).length;
+  document.getElementById('stats-bar').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Total de orçamentos</div><div class="stat-val">${data.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Volume total orçado</div><div class="stat-val orange">${fmt(total)}</div></div>
+    <div class="stat-card"><div class="stat-label">Com desconto</div><div class="stat-val">${comDesc}</div></div>
+    <div class="stat-card"><div class="stat-label">E-mails cadastrados</div><div class="stat-val">${[...new Set(data.map(o=>o.email))].length}</div></div>
+  `;
+}
+
+function renderTabela(){
+  const data=getOrcamentos();
+  const busca=(document.getElementById('busca').value||'').toLowerCase();
+  const filtroStatus=document.getElementById('filtro-status').value;
+  const tbody=document.getElementById('tabela-body');
+  const empty=document.getElementById('empty-state');
+  const filtered=data.filter(o=>{
+    const matchBusca=!busca||(o.nome||'').toLowerCase().includes(busca)||(o.empresa||'').toLowerCase().includes(busca)||(o.cnpj||'').includes(busca)||(o.id||'').toLowerCase().includes(busca);
+    const matchStatus=!filtroStatus||(o.status||'gerado')===filtroStatus;
+    return matchBusca&&matchStatus;
+  });
+  if(filtered.length===0){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  const statusBadge=(s)=>{
+    const map={gerado:'badge-gerado',revisado:'badge-revisado',enviado:'badge-enviado'};
+    const label={gerado:'Gerado',revisado:'Revisado',enviado:'Enviado'};
+    return `<span class="badge-status ${map[s]||'badge-gerado'}">${label[s]||'Gerado'}</span>`;
+  };
+  tbody.innerHTML=filtered.reverse().map((o,i)=>{
+    const desc=parseFloat(o.desconto||0);
+    const totalOrig=parseFloat(o.total||0);
+    const totalFinal=desc>0?(o.descontoTipo==='percent'?totalOrig*(1-desc/100):totalOrig-desc):totalOrig;
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px;color:#C95227;">${o.id||'—'}</td>
+      <td>${o.data||'—'} ${o.hora?'<br><span style="font-size:10px;color:#aaa;">'+o.hora+'</span>':''}</td>
+      <td><strong>${o.empresa||'—'}</strong><br><span style="font-size:10px;color:#888;">${o.nome||''}</span></td>
+      <td>${o.telefone?'<a href="https://wa.me/55'+o.telefone.replace(/\D/g,'')+'" target="_blank" style="color:#25D366;text-decoration:none;">'+o.telefone+'</a>':'—'}</td>
+      <td>${o.municipio||'—'}</td>
+      <td style="text-align:center;">${o.totalFuros||'—'}</td>
+      <td>${fmt(o.total||0)}</td>
+      <td>${desc>0?`<span style="color:#C95227;font-weight:600;">${o.descontoTipo==='percent'?desc+'%':fmt(desc)}</span>`:'<span style="color:#ccc;">—</span>'}</td>
+      <td style="font-weight:700;color:#2D3A39;">${fmt(totalFinal)}</td>
+      <td>${statusBadge(o.status||'gerado')}</td>
+      <td style="display:flex;gap:5px;">
+        <button class="action-btn orange" onclick="abrirModal(${data.indexOf(o)})">✎ Revisar</button>
+        <button class="action-btn" style="color:#A32D2D;border-color:rgba(163,45,45,.3);" onclick="excluirOrcamento(${data.indexOf(o)})">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderEmails(){
+  const data=getOrcamentos();
+  const busca=(document.getElementById('busca-email').value||'').toLowerCase();
+  const unique=[];const seen=new Set();
+  data.forEach(o=>{if(!seen.has(o.email)){seen.add(o.email);unique.push(o);}});
+  const filtered=unique.filter(o=>!busca||(o.nome||'').toLowerCase().includes(busca)||(o.empresa||'').toLowerCase().includes(busca)||(o.email||'').toLowerCase().includes(busca));
+  const tbody=document.getElementById('email-body');
+  const empty=document.getElementById('empty-emails');
+  if(filtered.length===0){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  tbody.innerHTML=filtered.map(o=>`<tr>
+    <td>${o.nome||'—'}</td>
+    <td>${o.empresa||'—'}</td>
+    <td style="font-family:monospace;font-size:11px;">${o.cnpj||'—'}</td>
+    <td>${o.telefone?'<a href="https://wa.me/55'+o.telefone.replace(/\D/g,'')+'" target="_blank" style="color:#25D366;">'+o.telefone+'</a>':'—'}</td>
+    <td><a href="mailto:${o.email}" style="color:#C95227;">${o.email}</a></td>
+    <td>${o.municipio||'—'}</td>
+    <td>${o.data||'—'}</td>
+    <td style="font-weight:600;">${fmt(o.total||0)}</td>
+  </tr>`).join('');
+}
+
+function abrirModal(idx){
+  const data=getOrcamentos();
+  orcAtual={entry:data[idx],idx};
+  const o=data[idx];
+  document.getElementById('modal-title').textContent='Revisar: '+(o.id||'Orçamento');
+  document.getElementById('modal-info').innerHTML=`
+    <div class="info-item"><div class="info-label">Empresa</div><div class="info-val">${o.empresa||'—'}</div></div>
+    <div class="info-item"><div class="info-label">CNPJ</div><div class="info-val">${o.cnpj||'—'}</div></div>
+    <div class="info-item"><div class="info-label">A/C</div><div class="info-val">${o.nome||'—'}</div></div>
+    <div class="info-item"><div class="info-label">Telefone</div><div class="info-val">${o.telefone?'<a href="https://wa.me/55'+o.telefone.replace(/\D/g,'')+'" target="_blank" style="color:#25D366;">'+o.telefone+' ↗</a>':'—'}</div></div>
+    <div class="info-item"><div class="info-label">E-mail</div><div class="info-val">${o.email||'—'}</div></div>
+    <div class="info-item"><div class="info-label">Município</div><div class="info-val">${o.municipio||'—'}</div></div>
+    <div class="info-item"><div class="info-label">Previsão início</div><div class="info-val">${o.dataInicio||'—'}</div></div>
+    <div class="info-item"><div class="info-label">Total original</div><div class="info-val" style="color:#C95227;font-size:15px;">${fmt(o.total||0)}</div></div>
+    <div class="info-item"><div class="info-label">Status</div><div class="info-val">${o.status||'gerado'}</div></div>
+  `;
+  const itens=o.itens||[];
+  document.getElementById('modal-itens').innerHTML=itens.map(it=>{
+    const sub=it.qtd*it.prof*it.preco;
+    return `<tr style="border-bottom:.5px solid #f0ebe3;">
+      <td style="padding:6px 10px;">${it.nome}</td>
+      <td style="padding:6px 10px;">${it.tipo==='piso'?'Piso':'Viga/Pilar'}</td>
+      <td style="padding:6px 10px;">${it.prof} cm</td>
+      <td style="padding:6px 10px;">${it.qtd}</td>
+      <td style="padding:6px 10px;">R$ ${it.preco.toFixed(2).replace('.',',')}</td>
+      <td style="padding:6px 10px;font-weight:600;">R$ ${sub.toFixed(2).replace('.',',')}</td>
+    </tr>`;
+  }).join('');
+  // Calcular e exibir resumo
+  let subFuros=0,totalFurosM=0;
+  itens.forEach(it=>{subFuros+=it.qtd*it.prof*it.preco;totalFurosM+=it.qtd;});
+  const visitasM=Math.ceil(totalFurosM/8)||1;
+  let mobM=0,taxMinM=0;
+  if(totalFurosM>0&&totalFurosM<=8){if(subFuros<1200)taxMinM=1200-subFuros;}
+  else if(totalFurosM>8){mobM=visitasM*800;}
+  const totalM=subFuros+mobM+taxMinM;
+  const resumoEl=document.getElementById('modal-resumo');
+  resumoEl.innerHTML=`
+    <div style="display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;margin-bottom:.5rem;">
+      <span>Furos: <strong>${totalFurosM}</strong></span>
+      <span>Visitas: <strong style="color:#C95227;">${visitasM} × R$ 800,00 = R$ ${mobM.toFixed(2).replace('.',',')}</strong></span>
+      ${taxMinM>0?`<span>Taxa mínima: <strong>R$ ${taxMinM.toFixed(2).replace('.',',')}</strong></span>`:''}
+    </div>
+    <div style="font-size:13px;font-weight:700;color:#2D3A39;border-top:.5px solid #e8e2d9;padding-top:.5rem;">
+      Total original: <span style="color:#C95227;font-size:15px;">R$ ${totalM.toFixed(2).replace('.',',')}</span>
+    </div>`;
+  document.getElementById('desc-tipo').value=o.descontoTipo||'valor';
+  document.getElementById('desc-valor').value=parseFloat(o.desconto||0)||'';
+  document.getElementById('desc-ddl').value=o.faturamentoDDL||15;
+  const revAtual=(o.numRevisao||0)+1;
+  document.getElementById('desc-revisao-label').textContent='REV '+revAtual;
+  calcDesconto();
+  document.getElementById('modal-bg').classList.add('show');
+}
+
+function closeModal(){document.getElementById('modal-bg').classList.remove('show');orcAtual=null;}
+
+function calcDesconto(){
+  if(!orcAtual)return;
+  const o=orcAtual.entry;
+  const tipo=document.getElementById('desc-tipo').value;
+  const val=parseFloat(document.getElementById('desc-valor').value)||0;
+  const totalOrig=parseFloat(o.total||0);
+  document.getElementById('desc-input-label').textContent=tipo==='percent'?'Percentual (%)':'Valor fixo (R$)';
+  let descValor=0,totalFinal=totalOrig;
+  if(tipo==='percent'){descValor=totalOrig*(val/100);totalFinal=totalOrig-descValor;}
+  else{descValor=val;totalFinal=totalOrig-val;}
+  if(totalFinal<0)totalFinal=0;
+  document.getElementById('total-original').textContent=fmt(totalOrig);
+  document.getElementById('desconto-aplicado').textContent=descValor>0?'- '+fmt(descValor):'Sem desconto';
+  document.getElementById('total-final').textContent=fmt(totalFinal);
+  if(val>0){
+    const pct=((descValor/totalOrig)*100).toFixed(1);
+    document.getElementById('desconto-info').textContent=tipo==='percent'?`Desconto de ${val}% = ${fmt(descValor)} sobre o total original.`:`Desconto de ${fmt(val)} = ${pct}% sobre o total original.`;
+  } else {
+    document.getElementById('desconto-info').textContent='';
+  }
+}
+
+function salvarDesconto(){
+  if(!orcAtual)return null;
+  const data=getOrcamentos();
+  const tipo=document.getElementById('desc-tipo').value;
+  const val=parseFloat(document.getElementById('desc-valor').value)||0;
+  const motivo=document.getElementById('desc-motivo').value;
+  const totalOrig=parseFloat(data[orcAtual.idx].total||0);
+  let totalFinal=totalOrig;
+  if(tipo==='percent')totalFinal=totalOrig*(1-val/100);
+  else totalFinal=totalOrig-val;
+  if(totalFinal<0)totalFinal=0;
+  const ddlVal=parseInt(document.getElementById('desc-ddl').value)||15;
+  const revNum=(data[orcAtual.idx].numRevisao||0)+1;
+  data[orcAtual.idx].desconto=val;
+  data[orcAtual.idx].descontoTipo=tipo;
+  data[orcAtual.idx].descontoMotivo=motivo;
+  data[orcAtual.idx].faturamentoDDL=ddlVal;
+  data[orcAtual.idx].numRevisao=revNum;
+  data[orcAtual.idx].totalFinal=totalFinal.toFixed(2);
+  data[orcAtual.idx].status='revisado';
+  saveOrcamentos(data);
+  renderStats();renderTabela();
+  return{entry:data[orcAtual.idx],totalFinal,val,tipo,ddlVal,revNum};
+}
+
+function marcarEnviado(){
+  if(!orcAtual)return;
+  salvarDesconto();
+  const data=getOrcamentos();
+  data[orcAtual.idx].status='enviado';
+  saveOrcamentos(data);
+  renderStats();renderTabela();
+  closeModal();
+  alert('Orçamento marcado como enviado!');
+}
+
+function gerarPDFAdmin(){
+  const saved=salvarDesconto();
+  if(!saved)return;
+  const o=saved.entry;
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const cor1=[45,58,57];const corOr=[201,82,39];const creme=[229,222,212];
+  const hoje=new Date();
+  const dataStr=hoje.toLocaleDateString('pt-BR');
+  const validade=new Date(hoje.getTime()+15*86400000).toLocaleDateString('pt-BR');
+  const totalOrig=parseFloat(o.total||0);
+  const totalFinal=saved.totalFinal;
+  const descValor=saved.tipo==='percent'?totalOrig*(saved.val/100):saved.val;
+
+  doc.setFillColor(...cor1);doc.rect(0,0,210,28,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(201,82,39);doc.text('JBR FUROS',14,12);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(229,222,212);doc.text('CONCRETE DRILLING',14,17);
+  doc.setFontSize(8);doc.setTextColor(180,178,169);
+  doc.text('Av. Otavio Braga de Mesquita, 751 – Guarulhos – SP',14,23);
+  doc.text('Tel: (11) 96630-3028  |  contato@jbrfuros.com.br',14,27);
+
+  doc.setFontSize(16);doc.setFont('helvetica','bold');doc.setTextColor(...corOr);
+  const revLabel=saved&&saved.revNum?'REV '+saved.revNum:'REV 1';
+  doc.text('PROPOSTA TÉCNICA COMERCIAL – '+revLabel,14,42);
+  doc.setDrawColor(...corOr);doc.setLineWidth(0.5);doc.line(14,44,196,44);
+
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(...cor1);
+  doc.text('Nº Orçamento: '+(o.id||'—')+' ('+revLabel+')',14,52);
+  doc.text('Data revisão: '+dataStr,140,52);doc.text('Validade: '+validade,140,57);
+
+  doc.setFillColor(241,239,232);doc.rect(14,60,182,28,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...cor1);
+  doc.text('A/C: '+(o.empresa||'')+' – '+(o.nome||''),18,68);
+  doc.setFont('helvetica','normal');
+  doc.text('Município: '+(o.municipio||'')+(o.local?' – '+o.local:''),18,74);
+  doc.text('E-mail: '+(o.email||''),18,80);
+  doc.text('Ref: Proposta Comercial para execução de furos em concreto armado – '+(o.estrutura||'')+(o.municipio?' – '+o.municipio:''),18,86,{maxWidth:174});
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('1 – Escopo',14,98);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...cor1);
+  doc.text('Ref.: Proposta Comercial para execução de furos em concreto armado – '+(o.estrutura||'')+(o.local?' – '+o.local:'')+(o.municipio?' – '+o.municipio:''),14,104,{maxWidth:182});
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('2 – Método executivo',14,114);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...cor1);
+  doc.text('Os furos serão realizados com perfuratriz Husqvarna e brocas diamantadas, conforme diâmetros solicitados.',14,120,{maxWidth:182});
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('3 – Custos',14,130);
+
+  const thead=[['Item','Ø Furo','Tipo','Prof.','Qtd','Unit/cm','Total']];
+  const itens=o.itens||[];
+  let subtotalFuros=0;let totalFurosN=0;
+  itens.forEach(it=>{subtotalFuros+=it.qtd*it.prof*it.preco;totalFurosN+=it.qtd;});
+  const visitas=Math.ceil(totalFurosN/8);
+  let mob=0,taxMin=0;
+  if(totalFurosN>0&&totalFurosN<=8){if(subtotalFuros<1200)taxMin=1200-subtotalFuros;}
+  else if(totalFurosN>8){mob=visitas*800;}
+
+  const tbody_rows=itens.map((it,i)=>{const sub=it.qtd*it.prof*it.preco;return[(i+1).toString(),it.nome,it.tipo==='piso'?'Piso':'Viga/Pilar',it.prof+' cm',it.qtd.toString(),'R$ '+it.preco.toFixed(2).replace('.',','),'R$ '+sub.toFixed(2).replace('.',',')];});
+  if(mob>0)tbody_rows.push(['','Mobilização ('+visitas+'x R$ 800,00)','','','','','R$ '+mob.toFixed(2).replace('.',',')]);
+  if(taxMin>0)tbody_rows.push(['','Taxa mínima (complemento)','','','','','R$ '+taxMin.toFixed(2).replace('.',',')]);
+  tbody_rows.push(['','','','','','Sub-total original','R$ '+totalOrig.toFixed(2).replace('.',',')]);
+  if(descValor>0){
+    const descLabel=saved.tipo==='percent'?'Desconto ('+saved.val+'%)':'Desconto comercial';
+    tbody_rows.push(['','',descLabel,'','','','- R$ '+descValor.toFixed(2).replace('.',',')]);
+  }
+  tbody_rows.push(['','','','','','TOTAL FINAL','R$ '+totalFinal.toFixed(2).replace('.',',')]);
+
+  doc.autoTable({startY:134,head:thead,body:tbody_rows,theme:'grid',
+    headStyles:{fillColor:cor1,textColor:creme,fontSize:8,fontStyle:'bold'},
+    bodyStyles:{fontSize:8,textColor:cor1},alternateRowStyles:{fillColor:[248,246,243]},
+    columnStyles:{0:{cellWidth:10},6:{fontStyle:'bold'}},margin:{left:14,right:14}});
+
+  let y=doc.lastAutoTable.finalY+8;
+
+  const diasEx=Math.ceil(totalFurosN/8)||1;
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('4 – Prazos',14,y);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...cor1);
+  doc.text('Previsão de início solicitada: '+(o.dataInicio||'A definir'),14,y+6);
+  doc.text('Início efetivo: A confirmar conforme disponibilidade – consultar agenda.',14,y+12);
+  doc.text('Execução: '+diasEx+' dia'+(diasEx>1?'s':'')+' ('+totalFurosN+' furos ÷ 8 furos/dia = '+diasEx+' visita'+(diasEx>1?'s':'')+').',14,y+18);
+  y+=26;
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('5 – Responsabilidades do contratante',14,y);
+  const resp=['Demarcação dos serviços a serem executados com antecedência dos furos e cortes.','Área de trabalho livre e desimpedida, com serviço necessário para não paralisação da equipe.','Iluminação adequada dos locais dos serviços.','Local seguro para guardar os equipamentos (quando necessário).','Fornecer ponto de água até 25m com vazão mínima de 10L/min.','Fornecer ponto de energia elétrica 220v monofásica a 25m do local de execução.','Escoramentos, andaimes, retirada de entulho e limpeza por conta da contratante.','Furos em pontos com interferência serão contabilizados por cm perfurado.','A locação dos furos é responsabilidade do contratante — posicionamento pode afetar a integridade da estrutura.'];
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...cor1);
+  resp.forEach((r,i)=>{doc.text('• '+r,16,y+6+(i*5),{maxWidth:178});});
+  y+=54;
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('6 – Validade',14,y);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...cor1);
+  doc.text('A presente proposta é válida por 15 dias (até '+validade+').',14,y+6);
+  y+=20;
+
+  if(y>250){doc.addPage();y=20;}
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('7 – Valores e condições',14,y);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...cor1);
+  if(descValor>0){doc.text('Valor original: R$ '+totalOrig.toFixed(2).replace('.',',')+'  |  Desconto: R$ '+descValor.toFixed(2).replace('.',','),14,y+6);}
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text('Valor total com desconto: R$ '+totalFinal.toFixed(2).replace('.',','),14,y+(descValor>0?12:6));
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text('NF emitida pós aceite do responsável. Faturamento em '+(o.faturamentoDDL||15)+' DDL.',14,y+(descValor>0?18:12));
+  y+=descValor>0?28:20;
+
+  if(y>260){doc.addPage();y=20;}
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...cor1);
+  doc.text('À disposição para maiores esclarecimentos. Atenciosamente,',14,y);
+  doc.setFont('helvetica','bold');doc.text('Robson Morais – Engº Civil – CREA 5063927075',14,y+12);
+
+  doc.setFillColor(...cor1);doc.rect(0,282,210,15,'F');
+  doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...creme);
+  doc.text('JBR Furos  |  Av. Otavio Braga de Mesquita, 751 – Guarulhos – SP  |  (11) 96630-3028  |  contato@jbrfuros.com.br',14,289);
+
+  const isMobileAdmin=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(isMobileAdmin){
+    const pdfUrl=doc.output('bloburl');
+    window.open(pdfUrl,'_blank');
+  } else {
+    doc.save('JBR_Furos_'+(o.id||'ORC')+'_'+revLabel+'.pdf');
+  }
+  alert('PDF '+revLabel+' gerado! Envie manualmente para '+o.email);
+}
+
+function excluirOrcamento(idx){
+  const data=getOrcamentos();
+  const o=data[idx];
+  if(!o)return;
+  if(!confirm('Excluir o orçamento '+o.id+' de '+o.empresa+'?\nEssa ação não pode ser desfeita.'))return;
+  if(o._docId&&window._excluirDoFirestore) window._excluirDoFirestore(o._docId);
+  data.splice(idx,1);
+  localStorage.setItem('jbr_emails',JSON.stringify(data));
+  renderStats();renderTabela();renderEmails();
+}
+
+function limparTodosOrcamentos(){
+  if(!confirm('Tem certeza que deseja apagar TODOS os orçamentos e e-mails salvos? Esta ação não pode ser desfeita.'))return;
+  if(!confirm('Confirme novamente: isso vai limpar todo o histórico de orçamentos e o banco de e-mails. Continuar?'))return;
+  // Excluir do Firestore
+  const todosOrc=getOrcamentos();
+  if(window._excluirDoFirestore){
+    todosOrc.forEach(o=>{ if(o._docId) window._excluirDoFirestore(o._docId); });
+  }
+  localStorage.removeItem('jbr_emails');
+  localStorage.removeItem('jbr_orcamento_atual');
+  renderStats();renderTabela();renderEmails();
+  alert('Histórico limpo com sucesso!');
+}
+
+function exportarCSV(){
+  const data=getOrcamentos();
+  const header='Nº Orçamento,Data,Hora,Empresa,CNPJ,Nome,Telefone,E-mail,Município,Endereço,Estrutura,Furos,Subtotal,Mobilização,Taxa Mínima,Total Original,Desconto Tipo,Desconto Valor,Total Final,Status\n';
+  const rows=data.map(o=>{
+    const desc=parseFloat(o.desconto||0);
+    const totalOrig=parseFloat(o.total||0);
+    const totalFinal=o.totalFinal||totalOrig.toFixed(2);
+    return[o.id||'',o.data||'',o.hora||'',o.empresa||'',o.cnpj||'',o.nome||'',o.telefone||'',o.email||'',o.municipio||'',o.local||'',o.estrutura||'',o.totalFuros||0,o.subtotal||0,o.mobilizacao||0,o.taxaMinima||0,totalOrig.toFixed(2),o.descontoTipo||'',desc,totalFinal,o.status||'gerado'].join(',');
+  }).join('\n');
+  const blob=new Blob(['\uFEFF'+header+rows],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='JBR_Furos_Orcamentos.csv';a.click();
+}
+
+function exportarEmailsCSV(){
+  const data=getOrcamentos();
+  const unique=[];const seen=new Set();
+  data.forEach(o=>{if(!seen.has(o.email)){seen.add(o.email);unique.push(o);}});
+  const header='Nome,Empresa,CNPJ,Telefone,E-mail,Município,Data Cadastro,Total Orçado\n';
+  const rows=unique.map(o=>[o.nome||'',o.empresa||'',o.cnpj||'',o.telefone||'',o.email||'',o.municipio||'',o.data||'',o.total||0].join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+header+rows],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='JBR_Furos_Emails.csv';a.click();
+}
+
+function switchTab(id,el){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('show'));
+  el.classList.add('active');
+  document.getElementById('tab-'+id).classList.add('show');
+  if(id==='emails')renderEmails();
+}
+</script>
+</body>
+</html>

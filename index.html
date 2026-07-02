@@ -8,6 +8,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
   import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ",
@@ -20,12 +21,17 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const storage = getStorage(app);
   window._fbDb = db;
   window._fbCollection = collection;
   window._fbAddDoc = addDoc;
   window._fbGetDocs = getDocs;
   window._fbQuery = query;
   window._fbOrderBy = orderBy;
+  window._fbStorage = storage;
+  window._fbStorageRef = ref;
+  window._fbUploadBytes = uploadBytes;
+  window._fbGetDownloadURL = getDownloadURL;
   window._fbReady = true;
   document.dispatchEvent(new Event('firebase-ready'));
 </script>
@@ -758,11 +764,10 @@ function salvarEmail(){
     window._fbAddDoc(window._fbCollection(window._fbDb,'orcamentos'),entry)
       .catch(e=>console.error('Erro ao salvar no Firestore:',e));
   }
-  notificarEquipeJBR(entry);
   return entry;
 }
 
-function notificarEquipeJBR(entry){
+function notificarEquipeJBR(entry,pdfUrl){
   if(EMAILJS_TEMPLATE_INTERNO==='TEMPLATE_INTERNO_ID')return;
   let tentativas=0;
   const tentar=()=>{
@@ -773,7 +778,8 @@ function notificarEquipeJBR(entry){
     }
     emailjs.init({publicKey:EMAILJS_PUBLIC_KEY});
     const itensTexto=entry.itens.map(it=>it.nome+' ('+(it.tipo==='piso'?'Piso':'Viga/Pilar')+') - '+it.qtd+'x '+it.prof+'cm').join(' | ');
-    const resumo='Novo orcamento gerado!\n\nNumero: '+entry.id+'\nEmpresa: '+entry.empresa+'\nCNPJ: '+entry.cnpj+'\nContato: '+entry.nome+'\nTelefone: '+(entry.telefone||'Nao informado')+'\nE-mail: '+entry.email+'\nMunicipio: '+entry.municipio+'\nPrevisao: '+entry.dataInicio+'\n\nItens: '+itensTexto+'\nTotal furos: '+entry.totalFuros+'\nVisitas: '+entry.visitas+'\nValor: R$ '+entry.total+'\n\nData/Hora: '+entry.data+' '+entry.hora;
+    const linkTexto=pdfUrl?('\n\nPDF do orcamento: '+pdfUrl):'';
+    const resumo='Novo orcamento gerado!\n\nNumero: '+entry.id+'\nEmpresa: '+entry.empresa+'\nCNPJ: '+entry.cnpj+'\nContato: '+entry.nome+'\nTelefone: '+(entry.telefone||'Nao informado')+'\nE-mail: '+entry.email+'\nMunicipio: '+entry.municipio+'\nPrevisao: '+entry.dataInicio+'\n\nItens: '+itensTexto+'\nTotal furos: '+entry.totalFuros+'\nVisitas: '+entry.visitas+'\nValor: R$ '+entry.total+'\n\nData/Hora: '+entry.data+' '+entry.hora+linkTexto;
     emailjs.send(EMAILJS_SERVICE,EMAILJS_TEMPLATE_INTERNO,{
       to_email:EMAIL_JBR,
       to_name:'Equipe JBR Furos',
@@ -783,6 +789,42 @@ function notificarEquipeJBR(entry){
       .catch(e=>console.error('Erro notificacao interna:',e));
   };
   tentar();
+}
+
+function enviarPDFParaCliente(entry,pdfUrl){
+  if(EMAILJS_TEMPLATE_INTERNO==='TEMPLATE_INTERNO_ID'||!entry.email)return;
+  let tentativas=0;
+  const tentar=()=>{
+    if(typeof emailjs==='undefined'||EMAILJS_PUBLIC_KEY==='YOUR_PUBLIC_KEY'){
+      if(tentativas++<6){setTimeout(tentar,500);}
+      else{console.warn('EmailJS indisponivel para envio do PDF ao cliente');}
+      return;
+    }
+    emailjs.init({publicKey:EMAILJS_PUBLIC_KEY});
+    const mensagem='Olá '+entry.nome+',\n\nSeu orçamento '+entry.id+' foi gerado com sucesso!\n\nAcesse o PDF completo pelo link abaixo:\n'+pdfUrl+'\n\nEste orçamento é válido por 15 dias.\n\nQualquer dúvida, estamos à disposição: (11) 96630-3028 · contato@jbrfuros.com.br\n\nObrigado por escolher a JBR Furos!';
+    emailjs.send(EMAILJS_SERVICE,EMAILJS_TEMPLATE_INTERNO,{
+      to_email:entry.email,
+      to_name:entry.nome,
+      codigo:mensagem,
+      from_name:'JBR Furos'
+    }).then(()=>console.log('PDF enviado ao cliente por e-mail OK'))
+      .catch(e=>console.error('Erro ao enviar PDF ao cliente:',e));
+  };
+  tentar();
+}
+
+async function uploadPDFStorage(doc,numOrc){
+  try{
+    if(!window._fbReady||!window._fbStorage)return null;
+    const blob=doc.output('blob');
+    const fileRef=window._fbStorageRef(window._fbStorage,'orcamentos/'+numOrc+'.pdf');
+    await window._fbUploadBytes(fileRef,blob);
+    const url=await window._fbGetDownloadURL(fileRef);
+    return url;
+  }catch(e){
+    console.error('Erro ao subir PDF para o Firebase Storage:',e);
+    return null;
+  }
 }
 
 async function gerarPDF(orcEntry){
@@ -964,6 +1006,14 @@ async function gerarPDF(orcEntry){
   document.getElementById('step3').style.display='none';
   document.getElementById('step4').style.display='block';
   document.getElementById('success-msg').textContent='Orçamento '+numOrc+' baixado! Válido por 15 dias. Dúvidas: (11) 96630-3028 · contato@jbrfuros.com.br';
+
+  // Hospeda o PDF no Firebase Storage e envia o link por e-mail (cliente + equipe)
+  uploadPDFStorage(doc,numOrc).then(pdfUrl=>{
+    if(orcEntry){
+      notificarEquipeJBR(orcEntry,pdfUrl);
+      enviarPDFParaCliente(orcEntry,pdfUrl);
+    }
+  });
 }
 
 function novoOrcamento(){

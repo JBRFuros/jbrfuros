@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-  import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+  import { getFirestore, collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ",
@@ -25,6 +25,7 @@
   window._fbCollection = collection;
   window._fbGetDocs = getDocs;
   window._fbDoc = doc;
+  window._fbAddDoc = addDoc;
   window._fbUpdateDoc = updateDoc;
   window._fbDeleteDoc = deleteDoc;
   window._fbQuery = query;
@@ -45,7 +46,42 @@
     }
   }
 
+  // Carregar contratos do Firestore ao iniciar
+  async function carregarContratosDoFirestore(){
+    try{
+      const q = window._fbQuery(window._fbCollection(db,'contratos'), window._fbOrderBy('dataCriacao','desc'));
+      const snap = await window._fbGetDocs(q);
+      const data = [];
+      snap.forEach(d => data.push({...d.data(), _docId: d.id}));
+      localStorage.setItem('jbr_contratos', JSON.stringify(data));
+      console.log('Firestore: '+data.length+' contratos carregados');
+      if(window._adminLogado && typeof renderContratos==='function') renderContratos();
+    } catch(e){
+      console.error('Erro ao carregar contratos do Firestore:', e);
+    }
+  }
+
   window._carregarDoFirestore = carregarDoFirestore;
+  window._carregarContratosDoFirestore = carregarContratosDoFirestore;
+
+  window._criarContratoNoFirestore = async function(contrato){
+    try{
+      const ref = await window._fbAddDoc(window._fbCollection(db,'contratos'), contrato);
+      return ref.id;
+    } catch(e){ console.error('Erro ao criar contrato:', e); return null; }
+  };
+
+  window._salvarContratoNoFirestore = async function(data){
+    for(const c of data){
+      if(c._docId){
+        try{
+          const ref = window._fbDoc(db,'contratos',c._docId);
+          const {_docId,...dadosSemId} = c;
+          await window._fbUpdateDoc(ref, dadosSemId);
+        } catch(e){ console.error('Erro ao atualizar contrato:', e); }
+      }
+    }
+  };
   window._salvarNoFirestore = async function(data){
     // Sincronizar todas as alterações de volta para o Firestore
     for(const o of data){
@@ -67,7 +103,7 @@
   };
 
   document.addEventListener('DOMContentLoaded', ()=>{
-    if(window._adminLogado) carregarDoFirestore();
+    if(window._adminLogado) { carregarDoFirestore(); carregarContratosDoFirestore(); }
     else window._fbPendingLoad = true;
   });
 </script>
@@ -133,6 +169,11 @@ td{padding:11px 14px;font-size:12px;color:#333;}
 .badge-gerado{background:#e8f4fd;color:#185FA5;border:.5px solid #b5d4f4;}
 .badge-revisado{background:#fef8ee;color:#854F0B;border:.5px solid rgba(201,82,39,.3);}
 .badge-enviado{background:#eaf3de;color:#27500A;border:.5px solid #97c459;}
+.badge-aprovado{background:#e6f7ee;color:#0A6B3B;border:.5px solid #7fd4a8;}
+.badge-recusado{background:#fbe9e9;color:#A32D2D;border:.5px solid #e8a8a8;}
+.badge-ativo{background:#eaf3de;color:#27500A;border:.5px solid #97c459;}
+.badge-encerrado{background:#eef0ef;color:#555;border:.5px solid #ccc;}
+.badge-atrasado{background:#fef8ee;color:#854F0B;border:.5px solid rgba(201,82,39,.3);}
 
 /* MODAL */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:500;padding:1rem;}
@@ -184,6 +225,15 @@ td{padding:11px 14px;font-size:12px;color:#333;}
 .action-btn:hover{background:#2D3A39;color:#fff;border-color:#2D3A39;}
 .action-btn.orange:hover{background:#C95227;color:#fff;border-color:#C95227;}
 </style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18269922593"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'AW-18269922593');
+</script>
 </head>
 <body>
 
@@ -210,6 +260,7 @@ td{padding:11px 14px;font-size:12px;color:#333;}
 
     <div class="tab-nav">
       <button class="tab-btn active" onclick="switchTab('orcamentos',this)">Orçamentos</button>
+      <button class="tab-btn" onclick="switchTab('contratos',this)">Contratos</button>
       <button class="tab-btn" onclick="switchTab('emails',this)">Banco de E-mails</button>
     </div>
 
@@ -226,6 +277,8 @@ td{padding:11px 14px;font-size:12px;color:#333;}
           <option value="gerado">Gerado</option>
           <option value="revisado">Revisado</option>
           <option value="enviado">Enviado</option>
+          <option value="aprovado">Aprovado</option>
+          <option value="recusado">Recusado</option>
         </select>
         <button class="btn-export" onclick="exportarCSV()">↓ Exportar CSV</button>
         <button class="btn-export" style="background:#A32D2D;" onclick="limparTodosOrcamentos()">🗑 Limpar todos</button>
@@ -253,6 +306,45 @@ td{padding:11px 14px;font-size:12px;color:#333;}
         <div class="empty-state" id="empty-state" style="display:none;">
           <i class="ti ti-file-off" aria-hidden="true"></i>
           Nenhum orçamento encontrado.
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTRATOS -->
+    <div class="tab-content" id="tab-contratos">
+      <div class="stats" id="stats-contratos"></div>
+
+      <div class="filters">
+        <label>Buscar:</label>
+        <input type="text" id="busca-contrato" placeholder="Nome, empresa, CNPJ ou nº contrato..." oninput="renderContratos()" style="min-width:260px;"/>
+        <label>Status:</label>
+        <select id="filtro-status-contrato" onchange="renderContratos()">
+          <option value="">Todos</option>
+          <option value="ativo">Ativo</option>
+          <option value="encerrado">Encerrado</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nº Contrato</th>
+              <th>Empresa</th>
+              <th>Município</th>
+              <th>Furos orçados</th>
+              <th>Valor</th>
+              <th>Prazo</th>
+              <th>Situação</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-contratos-body"></tbody>
+        </table>
+        <div class="empty-state" id="empty-state-contratos" style="display:none;">
+          <i class="ti ti-file-off" aria-hidden="true"></i>
+          Nenhum contrato encontrado.
         </div>
       </div>
     </div>
@@ -338,6 +430,10 @@ td{padding:11px 14px;font-size:12px;color:#333;}
               <label>Faturamento (DDL)</label>
               <input type="number" id="desc-ddl" min="1" value="15" placeholder="15"/>
             </div>
+            <div class="fg" style="flex:0 0 auto;max-width:170px;">
+              <label>Prazo de conclusão</label>
+              <input type="date" id="desc-prazo"/>
+            </div>
           </div>
           <div style="background:var(--color-background-secondary,#f7f4ef);border-radius:8px;padding:.6rem 1rem;margin-top:.75rem;display:flex;align-items:center;gap:10px;">
             <i class="ti ti-git-branch" aria-hidden="true" style="color:#C95227;font-size:16px;"></i>
@@ -357,6 +453,8 @@ td{padding:11px 14px;font-size:12px;color:#333;}
         <button class="btn-cancelar" onclick="closeModal()">Cancelar</button>
         <button class="btn-pdf" onclick="gerarPDFAdmin()"><i class="ti ti-file-download" aria-hidden="true"></i> Baixar PDF revisado</button>
         <button class="btn-enviar" onclick="marcarEnviado()"><i class="ti ti-check" aria-hidden="true"></i> Marcar como enviado</button>
+        <button class="btn-enviar" style="background:#A32D2D;" onclick="recusarOrcamento()"><i class="ti ti-x" aria-hidden="true"></i> Recusar</button>
+        <button class="btn-enviar" style="background:#0A6B3B;" onclick="aprovarOrcamento()"><i class="ti ti-check" aria-hidden="true"></i> Aprovar e Gerar Contrato</button>
       </div>
     </div>
   </div>
@@ -374,7 +472,7 @@ function doLogin(){
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='block';
     window._adminLogado=true;
-    if(window._carregarDoFirestore){ window._carregarDoFirestore(); }
+    if(window._carregarDoFirestore){ window._carregarDoFirestore(); window._carregarContratosDoFirestore(); }
     else { renderStats();renderTabela();renderEmails(); }
   } else {
     document.getElementById('login-error').style.display='block';
@@ -386,6 +484,68 @@ function getOrcamentos(){return JSON.parse(localStorage.getItem('jbr_emails')||'
 function saveOrcamentos(data){
   localStorage.setItem('jbr_emails',JSON.stringify(data));
   if(window._salvarNoFirestore) window._salvarNoFirestore(data);
+}
+
+function getContratos(){return JSON.parse(localStorage.getItem('jbr_contratos')||'[]');}
+function saveContratos(data){
+  localStorage.setItem('jbr_contratos',JSON.stringify(data));
+  if(window._salvarContratoNoFirestore) window._salvarContratoNoFirestore(data);
+}
+
+async function aprovarOrcamento(){
+  if(!orcAtual)return;
+  const prazoInput=document.getElementById('desc-prazo').value;
+  if(!prazoInput){alert('Informe o prazo de conclusão antes de aprovar o orçamento.');return;}
+  salvarDesconto();
+  const data=getOrcamentos();
+  const o=data[orcAtual.idx];
+  o.status='aprovado';
+  saveOrcamentos(data);
+
+  const numContrato='CTR-'+(o.id||'').replace(/^ORC-/,'');
+  const furosTotais=(o.itens||[]).reduce((s,it)=>s+(parseInt(it.qtd)||0),0);
+  const contrato={
+    id:numContrato,
+    orcamentoId:o._docId||null,
+    orcamentoNum:o.id||'',
+    empresa:o.empresa||'',
+    cnpj:o.cnpj||'',
+    contato:o.nome||'',
+    telefone:o.telefone||'',
+    email:o.email||'',
+    municipio:o.municipio||'',
+    dataInicio:o.dataInicio||'',
+    prazoConclusao:prazoInput,
+    itens:o.itens||[],
+    furosTotais:furosTotais,
+    furosExecutados:0,
+    valorTotal:parseFloat(o.totalFinal||o.total||0),
+    status:'ativo',
+    dataCriacao:new Date().toISOString()
+  };
+
+  if(window._criarContratoNoFirestore){
+    const docId=await window._criarContratoNoFirestore(contrato);
+    if(docId){
+      const contratosLocais=getContratos();
+      contratosLocais.unshift({...contrato,_docId:docId});
+      localStorage.setItem('jbr_contratos',JSON.stringify(contratosLocais));
+    }
+  }
+  renderStats();renderTabela();
+  if(typeof renderContratos==='function')renderContratos();
+  closeModal();
+  alert('Orçamento aprovado! Contrato '+numContrato+' criado com sucesso.');
+}
+
+function recusarOrcamento(){
+  if(!orcAtual)return;
+  if(!confirm('Confirma recusar este orçamento? Ele será marcado como perdido.'))return;
+  const data=getOrcamentos();
+  data[orcAtual.idx].status='recusado';
+  saveOrcamentos(data);
+  renderStats();renderTabela();
+  closeModal();
 }
 
 function fmt(v){return 'R$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -416,8 +576,8 @@ function renderTabela(){
   if(filtered.length===0){tbody.innerHTML='';empty.style.display='block';return;}
   empty.style.display='none';
   const statusBadge=(s)=>{
-    const map={gerado:'badge-gerado',revisado:'badge-revisado',enviado:'badge-enviado'};
-    const label={gerado:'Gerado',revisado:'Revisado',enviado:'Enviado'};
+    const map={gerado:'badge-gerado',revisado:'badge-revisado',enviado:'badge-enviado',aprovado:'badge-aprovado',recusado:'badge-recusado'};
+    const label={gerado:'Gerado',revisado:'Revisado',enviado:'Enviado',aprovado:'Aprovado',recusado:'Recusado'};
     return `<span class="badge-status ${map[s]||'badge-gerado'}">${label[s]||'Gerado'}</span>`;
   };
   tbody.innerHTML=filtered.reverse().map((o,i)=>{
@@ -441,6 +601,95 @@ function renderTabela(){
       </td>
     </tr>`;
   }).join('');
+}
+
+function contratoBadge(s){
+  const map={ativo:'badge-ativo',encerrado:'badge-encerrado'};
+  const label={ativo:'Ativo',encerrado:'Encerrado'};
+  return `<span class="badge-status ${map[s]||'badge-ativo'}">${label[s]||'Ativo'}</span>`;
+}
+
+function situacaoPrazo(c){
+  if((c.status||'ativo')==='encerrado'){
+    return '<span class="badge-status badge-ativo">🔵 Concluído</span>';
+  }
+  if(!c.prazoConclusao){
+    return '<span style="color:#ccc;">—</span>';
+  }
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  const prazo=new Date(c.prazoConclusao+'T00:00:00');
+  if(hoje>prazo){
+    return '<span class="badge-status badge-atrasado">🟡 Atrasado</span>';
+  }
+  return '<span class="badge-status badge-ativo">🟢 Em dia</span>';
+}
+
+function fmtData(iso){
+  if(!iso)return '—';
+  const [y,m,d]=iso.split('-');
+  return d+'/'+m+'/'+y;
+}
+
+function renderContratos(){
+  const data=getContratos();
+  const buscaEl=document.getElementById('busca-contrato');
+  const filtroEl=document.getElementById('filtro-status-contrato');
+  if(!buscaEl||!filtroEl)return;
+  const busca=(buscaEl.value||'').toLowerCase();
+  const filtroStatus=filtroEl.value;
+  const tbody=document.getElementById('tabela-contratos-body');
+  const empty=document.getElementById('empty-state-contratos');
+  const filtered=data.filter(c=>{
+    const matchBusca=!busca||(c.contato||'').toLowerCase().includes(busca)||(c.empresa||'').toLowerCase().includes(busca)||(c.cnpj||'').includes(busca)||(c.id||'').toLowerCase().includes(busca);
+    const matchStatus=!filtroStatus||(c.status||'ativo')===filtroStatus;
+    return matchBusca&&matchStatus;
+  });
+  const statsEl=document.getElementById('stats-contratos');
+  if(statsEl){
+    const ativos=data.filter(c=>(c.status||'ativo')==='ativo').length;
+    const valorAtivo=data.filter(c=>(c.status||'ativo')==='ativo').reduce((s,c)=>s+parseFloat(c.valorTotal||0),0);
+    statsEl.innerHTML=`
+      <div class="stat-card"><div class="stat-label">Total de contratos</div><div class="stat-val">${data.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Contratos ativos</div><div class="stat-val orange">${ativos}</div></div>
+      <div class="stat-card"><div class="stat-label">Volume ativo</div><div class="stat-val orange">${fmt(valorAtivo)}</div></div>
+    `;
+  }
+  if(filtered.length===0){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  tbody.innerHTML=filtered.map(c=>{
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px;color:#C95227;">${c.id||'—'}</td>
+      <td><strong>${c.empresa||'—'}</strong><br><span style="font-size:10px;color:#888;">${c.contato||''}</span></td>
+      <td>${c.municipio||'—'}</td>
+      <td style="text-align:center;">${c.furosExecutados||0} / ${c.furosTotais||0}</td>
+      <td style="font-weight:700;color:#2D3A39;">${fmt(c.valorTotal||0)}</td>
+      <td>${fmtData(c.prazoConclusao)}</td>
+      <td>${situacaoPrazo(c)}</td>
+      <td>${contratoBadge(c.status||'ativo')}</td>
+      <td style="display:flex;gap:5px;">
+        <button class="action-btn orange" onclick="verContrato('${c._docId||''}')">👁 Ver</button>
+        ${(c.status||'ativo')==='ativo'?`<button class="action-btn" onclick="encerrarContrato('${c._docId||''}')">Encerrar</button>`:''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function verContrato(docId){
+  const data=getContratos();
+  const c=data.find(x=>x._docId===docId);
+  if(!c)return;
+  const itensTxt=(c.itens||[]).map(it=>'• '+it.nome+' ('+(it.tipo==='piso'?'Piso':'Viga/Pilar')+') — '+it.qtd+'x '+it.prof+'cm').join('\n');
+  alert('Contrato '+c.id+'\n\nEmpresa: '+c.empresa+'\nCNPJ: '+c.cnpj+'\nContato: '+c.contato+'\nTelefone: '+(c.telefone||'—')+'\nE-mail: '+(c.email||'—')+'\nMunicípio: '+c.municipio+'\nPrazo de conclusão: '+fmtData(c.prazoConclusao)+'\n\nItens:\n'+itensTxt+'\n\nFuros orçados: '+c.furosTotais+'\nFuros executados: '+(c.furosExecutados||0)+'\nValor total: '+fmt(c.valorTotal||0)+'\nStatus: '+(c.status||'ativo')+'\nOrçamento de origem: '+c.orcamentoNum);
+}
+
+function encerrarContrato(docId){
+  if(!confirm('Confirma o encerramento deste contrato?'))return;
+  const data=getContratos();
+  const idx=data.findIndex(x=>x._docId===docId);
+  if(idx<0)return;
+  data[idx].status='encerrado';
+  saveContratos(data);
+  renderContratos();
 }
 
 function renderEmails(){
@@ -514,6 +763,7 @@ function abrirModal(idx){
   document.getElementById('desc-tipo').value=o.descontoTipo||'valor';
   document.getElementById('desc-valor').value=parseFloat(o.desconto||0)||'';
   document.getElementById('desc-ddl').value=o.faturamentoDDL||15;
+  document.getElementById('desc-prazo').value=o.prazoConclusao||'';
   const revAtual=(o.numRevisao||0)+1;
   document.getElementById('desc-revisao-label').textContent='REV '+revAtual;
   calcDesconto();
@@ -556,11 +806,13 @@ function salvarDesconto(){
   else totalFinal=totalOrig-val;
   if(totalFinal<0)totalFinal=0;
   const ddlVal=parseInt(document.getElementById('desc-ddl').value)||15;
+  const prazoVal=document.getElementById('desc-prazo').value||'';
   const revNum=(data[orcAtual.idx].numRevisao||0)+1;
   data[orcAtual.idx].desconto=val;
   data[orcAtual.idx].descontoTipo=tipo;
   data[orcAtual.idx].descontoMotivo=motivo;
   data[orcAtual.idx].faturamentoDDL=ddlVal;
+  data[orcAtual.idx].prazoConclusao=prazoVal;
   data[orcAtual.idx].numRevisao=revNum;
   data[orcAtual.idx].totalFinal=totalFinal.toFixed(2);
   data[orcAtual.idx].status='revisado';
@@ -599,7 +851,7 @@ function gerarPDFAdmin(){
   doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(229,222,212);doc.text('CONCRETE DRILLING',14,17);
   doc.setFontSize(8);doc.setTextColor(180,178,169);
   doc.text('Av. Otavio Braga de Mesquita, 751 – Guarulhos – SP',14,23);
-  doc.text('Tel: (11) 96630-3028  |  jbr_furos@outlook.com.br',14,27);
+  doc.text('Tel: (11) 96630-3028  |  contato@jbrfuros.com.br',14,27);
 
   doc.setFontSize(16);doc.setFont('helvetica','bold');doc.setTextColor(...corOr);
   const revLabel=saved&&saved.revNum?'REV '+saved.revNum:'REV 1';
@@ -688,7 +940,7 @@ function gerarPDFAdmin(){
 
   doc.setFillColor(...cor1);doc.rect(0,282,210,15,'F');
   doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...creme);
-  doc.text('JBR Furos  |  Av. Otavio Braga de Mesquita, 751 – Guarulhos – SP  |  (11) 96630-3028  |  jbr_furos@outlook.com.br',14,289);
+  doc.text('JBR Furos  |  Av. Otavio Braga de Mesquita, 751 – Guarulhos – SP  |  (11) 96630-3028  |  contato@jbrfuros.com.br',14,289);
 
   const isMobileAdmin=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   if(isMobileAdmin){
@@ -754,6 +1006,7 @@ function switchTab(id,el){
   el.classList.add('active');
   document.getElementById('tab-'+id).classList.add('show');
   if(id==='emails')renderEmails();
+  if(id==='contratos')renderContratos();
 }
 </script>
 </body>

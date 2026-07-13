@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>JBR Furos – Área do Operador</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/dist/tabler-icons.min.css"/>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, doc, addDoc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ",
+    authDomain: "jbr-furos.firebaseapp.com",
+    projectId: "jbr-furos",
+    storageBucket: "jbr-furos.firebasestorage.app",
+    messagingSenderId: "949608635518",
+    appId: "1:949608635518:web:13812724ca2276c80fcc2f"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  window._fbDb = db;
+  window._fbCollection = collection;
+  window._fbGetDocs = getDocs;
+  window._fbDoc = doc;
+  window._fbAddDoc = addDoc;
+  window._fbUpdateDoc = updateDoc;
+  window._fbQuery = query;
+  window._fbWhere = where;
+  window._fbAuth = auth;
+  window._fbSignIn = signInWithEmailAndPassword;
+  window._fbSignOut = signOut;
+
+  onAuthStateChanged(auth, (user)=>{
+    if(window._onAuthChange) window._onAuthChange(user);
+  });
+
+  window._fbReady = true;
+  document.dispatchEvent(new Event('firebase-ready'));
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin:0; padding:0; }
+:root{--or:#C95227;--or2:#914531;--d2:#2D3A39;--cr:#E5DED4;}
+body{font-family:'Inter',sans-serif;background:#f0ebe3;min-height:100vh;color:#2D3A39;}
+.bebas{font-family:'Bebas Neue',sans-serif;letter-spacing:1px;}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;background:#2D3A39;display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem;}
+.login-box{background:#fff;border-radius:14px;padding:2.25rem 2rem;width:100%;max-width:360px;text-align:center;}
+.login-logo{font-family:'Bebas Neue',sans-serif;font-size:26px;color:#C95227;margin-bottom:.25rem;}
+.login-sub{font-size:12px;color:#888;margin-bottom:1.5rem;letter-spacing:.5px;}
+.login-box input{width:100%;padding:13px 14px;border:1px solid #ddd;border-radius:8px;font-size:15px;outline:none;margin-bottom:.75rem;}
+.login-box input:focus{border-color:#C95227;}
+.btn-login{width:100%;background:#C95227;color:#fff;border:none;padding:14px;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1.5px;cursor:pointer;}
+.login-err{color:#A32D2D;font-size:12px;margin-top:.5rem;display:none;}
+
+/* HEADER */
+header{background:#2D3A39;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;}
+header .logo{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#C95227;}
+header .op-nome{font-size:11px;color:#ccc;}
+.btn-sair{background:none;border:1px solid #555;color:#ccc;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;}
+
+/* APP */
+#app{display:none;max-width:640px;margin:0 auto;padding:16px;padding-bottom:80px;}
+.screen{display:none;}
+.screen.show{display:block;}
+
+h2.title{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--or);margin-bottom:2px;letter-spacing:.5px;}
+p.subtitle{font-size:12px;color:#777;margin-bottom:1rem;}
+
+.card{background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);cursor:pointer;border:1px solid transparent;transition:border .15s;}
+.card:active{border-color:var(--or);}
+.card .num{font-family:monospace;font-size:11px;color:var(--or);font-weight:600;}
+.card .empresa{font-weight:600;font-size:15px;margin:2px 0;}
+.card .info{font-size:12px;color:#888;}
+.card .progress-wrap{background:#eee;border-radius:6px;height:6px;margin-top:8px;overflow:hidden;}
+.card .progress-bar{background:var(--or);height:100%;border-radius:6px;}
+.card .progress-txt{font-size:11px;color:#666;margin-top:4px;}
+
+.empty-state{text-align:center;padding:3rem 1rem;color:#999;font-size:13px;}
+.empty-state i{font-size:32px;display:block;margin-bottom:10px;color:#ccc;}
+
+.btn-voltar{background:none;border:none;color:var(--or);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px;display:flex;align-items:center;gap:4px;}
+
+.section-box{background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;}
+.section-title{font-size:12px;font-weight:600;color:var(--or);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;border-bottom:2px solid #f0ebe3;padding-bottom:6px;}
+.fg{margin-bottom:10px;}
+.fg label{display:block;font-size:11px;color:#888;margin-bottom:3px;font-weight:500;}
+.fg input,.fg select,.fg textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;font-family:inherit;background:#fff;}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--or);}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+
+.check-row{display:flex;flex-wrap:wrap;gap:8px;}
+.check-chip{border:1px solid #ddd;border-radius:20px;padding:7px 14px;font-size:12px;cursor:pointer;user-select:none;}
+.check-chip.sel{background:var(--or);border-color:var(--or);color:#fff;}
+
+.furo-row{display:grid;grid-template-columns:1fr 1fr 70px 60px 1fr auto;gap:6px;margin-bottom:8px;align-items:center;}
+.furo-row select,.furo-row input{padding:8px;font-size:12px;border:1px solid #ddd;border-radius:6px;}
+.btn-del-furo{background:#fbe9e9;color:#A32D2D;border:none;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;}
+.btn-add-furo{background:#eaf3de;color:#27500A;border:1px dashed #97c459;padding:9px;border-radius:8px;width:100%;font-size:13px;cursor:pointer;font-weight:600;}
+
+.resumo-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;}
+.resumo-tbl th,.resumo-tbl td{border:1px solid #eee;padding:6px 4px;text-align:center;}
+.resumo-tbl th{background:#2D3A39;color:#fff;font-weight:500;}
+
+.sig-wrap{border:1px solid #ddd;border-radius:8px;overflow:hidden;background:#fafafa;}
+canvas.sig-pad{width:100%;height:150px;display:block;touch-action:none;background:#fff;}
+.sig-actions{display:flex;justify-content:space-between;padding:6px 10px;background:#f5f5f5;font-size:11px;}
+.sig-actions button{background:none;border:none;color:var(--or);font-size:11px;cursor:pointer;font-weight:600;}
+
+.btn-enviar-visita{width:100%;background:#0A6B3B;color:#fff;border:none;padding:16px;border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;cursor:pointer;margin-top:8px;}
+.btn-enviar-visita:disabled{background:#ccc;cursor:not-allowed;}
+
+.alerta-limite{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start;}
+.alerta-ok{background:#eaf3de;border:1px solid #97c459;color:#27500A;padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:12px;}
+
+.loader{text-align:center;padding:2rem;color:#999;font-size:13px;}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">JBR FUROS</div>
+    <div class="login-sub">ÁREA DO OPERADOR</div>
+    <input type="email" id="login-email" placeholder="E-mail"/>
+    <input type="password" id="login-senha" placeholder="Senha"/>
+    <button class="btn-login" onclick="fazerLogin()">ENTRAR</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <div>
+      <div class="logo">JBR FUROS</div>
+      <div class="op-nome" id="header-op-nome">Operador</div>
+    </div>
+    <button class="btn-sair" onclick="fazerLogout()">Sair</button>
+  </header>
+
+  <div id="app-body" style="padding:16px;max-width:640px;margin:0 auto;padding-bottom:80px;">
+
+    <!-- TELA 1: LISTA DE CONTRATOS -->
+    <div class="screen show" id="screen-lista">
+      <h2 class="title">Contratos Ativos</h2>
+      <p class="subtitle">Selecione um contrato para registrar uma visita</p>
+      <div id="lista-contratos"><div class="loader">Carregando contratos...</div></div>
+    </div>
+
+    <!-- TELA 2: FORMULÁRIO DE VISITA -->
+    <div class="screen" id="screen-visita">
+      <button class="btn-voltar" onclick="voltarLista()"><i class="ti ti-arrow-left"></i> Voltar</button>
+
+      <h2 class="title" id="visita-titulo">Registro de Visita</h2>
+      <p class="subtitle" id="visita-sub"></p>
+
+      <div id="alerta-area"></div>
+
+      <div class="section-box">
+        <div class="section-title">Identificação da Obra</div>
+        <div class="fg"><label>Empresa / Contratante</label><input type="text" id="v-empresa" readonly/></div>
+        <div class="fg"><label>Endereço da obra</label><input type="text" id="v-endereco" readonly/></div>
+        <div class="row2">
+          <div class="fg"><label>Responsável na obra</label><input type="text" id="v-responsavel" placeholder="Nome de quem acompanhou"/></div>
+          <div class="fg"><label>Piso / Andar / Nível</label><input type="text" id="v-piso-andar" placeholder="Ex: Térreo, 2º andar"/></div>
+        </div>
+      </div>
+
+      <div class="section-box">
+        <div class="section-title">Dados da Execução</div>
+        <div class="row2">
+          <div class="fg"><label>Data</label><input type="date" id="v-data"/></div>
+          <div class="fg"><label>Técnico executor</label><input type="text" id="v-tecnico"/></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Hora início</label><input type="time" id="v-hora-inicio"/></div>
+          <div class="fg"><label>Hora fim</label><input type="time" id="v-hora-fim"/></div>
+        </div>
+        <div class="fg">
+          <label>Tipo de estrutura</label>
+          <div class="check-row" id="v-tipo-estrutura">
+            <div class="check-chip" data-val="Piso/Laje" onclick="toggleChip(this)">Piso/Laje</div>
+            <div class="check-chip" data-val="Viga/Pilar" onclick="toggleChip(this)">Viga/Pilar</div>
+            <div class="check-chip" data-val="Parede" onclick="toggleChip(this)">Parede</div>
+            <div class="check-chip" data-val="Misto" onclick="toggleChip(this)">Misto</div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Equipamento (Husqvarna)</label><input type="text" id="v-equipamento" placeholder="Ex: DM 340"/></div>
+          <div class="fg"><label>Nº de série</label><input type="text" id="v-num-serie"/></div>
+        </div>
+      </div>
+
+      <div class="section-box">
+        <div class="section-title">Furos Executados Nesta Visita</div>
+        <div id="furos-lista"></div>
+        <button class="btn-add-furo" onclick="addFuroRow()">+ Adicionar furo</button>
+
+        <table class="resumo-tbl" id="resumo-bitola-tbl" style="margin-top:14px;"></table>
+
+        <div class="row3" style="margin-top:12px;">
+          <div class="fg"><label>Total Piso</label><input type="text" id="v-total-piso" readonly/></div>
+          <div class="fg"><label>Total Viga/Pilar</label><input type="text" id="v-total-viga" readonly/></div>
+          <div class="fg"><label>Total Geral</label><input type="text" id="v-total-geral" readonly/></div>
+        </div>
+        <div class="fg"><label>Observações gerais desta visita</label><textarea id="v-obs" rows="2"></textarea></div>
+      </div>
+
+      <div class="section-box">
+        <div class="section-title">Assinatura — Técnico Executor</div>
+        <div class="sig-wrap"><canvas class="sig-pad" id="sig-tecnico"></canvas></div>
+        <div class="sig-actions"><span id="sig-tecnico-nome-lbl"></span><button onclick="limparAssinatura('sig-tecnico')">Limpar</button></div>
+      </div>
+
+      <div class="section-box">
+        <div class="section-title">Assinatura — Responsável na Obra</div>
+        <div class="fg"><label>Nome de quem está assinando</label><input type="text" id="v-nome-responsavel-assinatura" placeholder="Nome completo"/></div>
+        <div class="sig-wrap"><canvas class="sig-pad" id="sig-responsavel"></canvas></div>
+        <div class="sig-actions"><span></span><button onclick="limparAssinatura('sig-responsavel')">Limpar</button></div>
+      </div>
+
+      <button class="btn-enviar-visita" id="btn-enviar" onclick="enviarVisita()">ENVIAR REGISTRO DE VISITA</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ============ ESTADO GLOBAL ============
+let operadorAtual=null; // {uid, nome, email}
+let contratoAtual=null;
+let furoIdCounter=0;
+const TABELA_DIAM={
+  1:'1 1/4',2:'2 1/4',3:'3 1/4',4:'4 1/4',5:'5 1/4',6:'6 1/4',7:'7 1/4',8:'8 1/4',9:'10 1/4'
+};
+
+document.addEventListener('firebase-ready', ()=>{
+  window._onAuthChange = async (user)=>{
+    if(user){
+      const ok = await validarOperador(user);
+      if(ok){
+        document.getElementById('login-screen').style.display='none';
+        document.getElementById('app').style.display='block';
+        carregarContratos();
+      } else {
+        mostrarErroLogin('Acesso não autorizado. Fale com o administrador.');
+        window._fbSignOut(window._fbAuth);
+      }
+    } else {
+      document.getElementById('login-screen').style.display='flex';
+      document.getElementById('app').style.display='none';
+    }
+  };
+});
+
+async function validarOperador(user){
+  try{
+    const q=window._fbQuery(window._fbCollection(window._fbDb,'operadores'),window._fbWhere('uid','==',user.uid));
+    const snap=await window._fbGetDocs(q);
+    if(snap.empty)return false;
+    let valido=false;
+    snap.forEach(d=>{
+      const data=d.data();
+      if(data.ativo!==false){
+        operadorAtual={uid:user.uid,nome:data.nome,email:data.email};
+        valido=true;
+      }
+    });
+    if(valido) document.getElementById('header-op-nome').textContent=operadorAtual.nome;
+    return valido;
+  }catch(e){console.error('Erro ao validar operador:',e);return false;}
+}
+
+function mostrarErroLogin(msg){
+  const el=document.getElementById('login-err');
+  el.textContent=msg;
+  el.style.display='block';
+}
+
+async function fazerLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const senha=document.getElementById('login-senha').value;
+  document.getElementById('login-err').style.display='none';
+  if(!email||!senha){mostrarErroLogin('Preencha e-mail e senha.');return;}
+  try{
+    await window._fbSignIn(window._fbAuth,email,senha);
+  }catch(e){
+    mostrarErroLogin('E-mail ou senha inválidos.');
+  }
+}
+
+function fazerLogout(){
+  window._fbSignOut(window._fbAuth);
+}
+
+// ============ LISTA DE CONTRATOS ============
+async function carregarContratos(){
+  const container=document.getElementById('lista-contratos');
+  container.innerHTML='<div class="loader">Carregando contratos...</div>';
+  try{
+    const q=window._fbQuery(window._fbCollection(window._fbDb,'contratos'),window._fbWhere('status','==','ativo'));
+    const snap=await window._fbGetDocs(q);
+    const contratos=[];
+    snap.forEach(d=>contratos.push({...d.data(),_docId:d.id}));
+    if(contratos.length===0){
+      container.innerHTML='<div class="empty-state"><i class="ti ti-file-off"></i>Nenhum contrato ativo no momento.</div>';
+      return;
+    }
+    container.innerHTML=contratos.map(c=>{
+      const pct=c.furosTotais?Math.min(100,Math.round((c.furosExecutados||0)/c.furosTotais*100)):0;
+      return `<div class="card" onclick='abrirContrato(${JSON.stringify(JSON.stringify(c))})'>
+        <div class="num">${c.id}</div>
+        <div class="empresa">${c.empresa||'—'}</div>
+        <div class="info">${c.municipio||''}${c.enderecoObra?' — '+c.enderecoObra:''}</div>
+        <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%;"></div></div>
+        <div class="progress-txt">${c.furosExecutados||0} / ${c.furosTotais||0} furos executados (${pct}%)</div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    console.error(e);
+    container.innerHTML='<div class="empty-state">Erro ao carregar contratos. Puxe a tela para atualizar.</div>';
+  }
+}
+
+function abrirContrato(contratoJsonStr){
+  contratoAtual=JSON.parse(contratoJsonStr);
+  document.getElementById('screen-lista').classList.remove('show');
+  document.getElementById('screen-visita').classList.add('show');
+  prepararFormularioVisita();
+}
+
+function voltarLista(){
+  document.getElementById('screen-visita').classList.remove('show');
+  document.getElementById('screen-lista').classList.add('show');
+  carregarContratos();
+}
+
+// ============ FORMULÁRIO DE VISITA ============
+async function prepararFormularioVisita(){
+  const c=contratoAtual;
+  document.getElementById('visita-titulo').textContent=c.id;
+  document.getElementById('visita-sub').textContent=c.empresa+' — próxima visita';
+
+  document.getElementById('v-empresa').value=c.empresa||'';
+  document.getElementById('v-endereco').value=(c.enderecoObra||'')+(c.municipio?' - '+c.municipio:'');
+  document.getElementById('v-responsavel').value='';
+  document.getElementById('v-piso-andar').value='';
+  document.getElementById('v-data').value=new Date().toISOString().slice(0,10);
+  document.getElementById('v-tecnico').value=operadorAtual.nome;
+  document.getElementById('v-hora-inicio').value='';
+  document.getElementById('v-hora-fim').value='';
+  document.getElementById('v-equipamento').value='';
+  document.getElementById('v-num-serie').value='';
+  document.getElementById('v-obs').value='';
+  document.getElementById('v-nome-responsavel-assinatura').value='';
+  document.querySelectorAll('#v-tipo-estrutura .check-chip').forEach(el=>el.classList.remove('sel'));
+
+  document.getElementById('furos-lista').innerHTML='';
+  furoIdCounter=0;
+  addFuroRow();
+
+  atualizarResumoBitola();
+  mostrarAlertaLimite();
+
+  setTimeout(()=>{
+    initSignaturePad('sig-tecnico');
+    initSignaturePad('sig-responsavel');
+  },50);
+}
+
+function mostrarAlertaLimite(){
+  const c=contratoAtual;
+  const area=document.getElementById('alerta-area');
+  const restante=(c.furosTotais||0)-(c.furosExecutados||0);
+  if(restante<=0){
+    area.innerHTML=`<div class="alerta-limite"><i class="ti ti-alert-triangle" style="font-size:16px;"></i><div>Este contrato já atingiu o limite de furos orçados (${c.furosTotais}). Qualquer furo adicional deve ser combinado com o cliente antes de prosseguir.</div></div>`;
+  } else if(restante<=Math.max(10,(c.furosTotais||0)*0.1)){
+    area.innerHTML=`<div class="alerta-limite"><i class="ti ti-alert-triangle" style="font-size:16px;"></i><div>Atenção: restam apenas <strong>${restante} furos</strong> até o limite orçado deste contrato.</div></div>`;
+  } else {
+    area.innerHTML=`<div class="alerta-ok">Limite orçado: ${c.furosTotais} furos · Já executados: ${c.furosExecutados||0} · Restam: ${restante}</div>`;
+  }
+}
+
+function toggleChip(el){
+  el.classList.toggle('sel');
+}
+
+function addFuroRow(){
+  furoIdCounter++;
+  const id='furo-'+furoIdCounter;
+  const wrap=document.createElement('div');
+  wrap.className='furo-row';
+  wrap.id=id;
+  wrap.innerHTML=`
+    <select class="f-diam" onchange="atualizarResumoBitola()">
+      ${Object.entries(TABELA_DIAM).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+    </select>
+    <select class="f-tipo" onchange="atualizarResumoBitola()">
+      <option value="piso">Piso/Laje</option>
+      <option value="viga">Viga/Pilar</option>
+    </select>
+    <input type="number" class="f-prof" placeholder="Prof cm" min="0" oninput="atualizarResumoBitola()"/>
+    <input type="number" class="f-qtd" placeholder="Qtd" min="0" value="1" oninput="atualizarResumoBitola()"/>
+    <input type="text" class="f-nivel" placeholder="Nível/andar"/>
+    <button class="btn-del-furo" onclick="delFuroRow('${id}')">✕</button>
+  `;
+  document.getElementById('furos-lista').appendChild(wrap);
+}
+
+function delFuroRow(id){
+  const el=document.getElementById(id);
+  if(el)el.remove();
+  atualizarResumoBitola();
+}
+
+function lerFuros(){
+  const rows=document.querySelectorAll('#furos-lista .furo-row');
+  const furos=[];
+  rows.forEach(r=>{
+    const diam=r.querySelector('.f-diam').value;
+    const tipo=r.querySelector('.f-tipo').value;
+    const prof=parseFloat(r.querySelector('.f-prof').value)||0;
+    const qtd=parseInt(r.querySelector('.f-qtd').value)||0;
+    const nivel=r.querySelector('.f-nivel').value;
+    if(qtd>0) furos.push({diam,tipo,prof,qtd,nivel});
+  });
+  return furos;
+}
+
+function atualizarResumoBitola(){
+  const furos=lerFuros();
+  const bitolas=Object.keys(TABELA_DIAM);
+  const somaPiso={},somaViga={};
+  bitolas.forEach(b=>{somaPiso[b]=0;somaViga[b]=0;});
+  let totalPiso=0,totalViga=0;
+  furos.forEach(f=>{
+    if(f.tipo==='piso'){somaPiso[f.diam]+=f.qtd;totalPiso+=f.qtd;}
+    else{somaViga[f.diam]+=f.qtd;totalViga+=f.qtd;}
+  });
+  const tbl=document.getElementById('resumo-bitola-tbl');
+  tbl.innerHTML=`
+    <tr><th>Tipo/Bitola</th>${bitolas.map(b=>`<th>${TABELA_DIAM[b]}</th>`).join('')}</tr>
+    <tr><td style="text-align:left;font-weight:600;">Piso/Laje</td>${bitolas.map(b=>`<td>${somaPiso[b]||''}</td>`).join('')}</tr>
+    <tr><td style="text-align:left;font-weight:600;">Viga/Pilar</td>${bitolas.map(b=>`<td>${somaViga[b]||''}</td>`).join('')}</tr>
+  `;
+  document.getElementById('v-total-piso').value=totalPiso;
+  document.getElementById('v-total-viga').value=totalViga;
+  document.getElementById('v-total-geral').value=totalPiso+totalViga;
+}
+
+// ============ ASSINATURA (CANVAS) ============
+const sigPads={};
+function initSignaturePad(canvasId){
+  const canvas=document.getElementById(canvasId);
+  const ctx=canvas.getContext('2d');
+  const ratio=window.devicePixelRatio||1;
+  canvas.width=canvas.offsetWidth*ratio;
+  canvas.height=canvas.offsetHeight*ratio;
+  ctx.scale(ratio,ratio);
+  ctx.strokeStyle='#2D3A39';
+  ctx.lineWidth=2;
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+
+  let drawing=false,lastX=0,lastY=0,hasSig=false;
+
+  function getPos(e){
+    const rect=canvas.getBoundingClientRect();
+    const clientX=e.touches?e.touches[0].clientX:e.clientX;
+    const clientY=e.touches?e.touches[0].clientY:e.clientY;
+    return {x:clientX-rect.left,y:clientY-rect.top};
+  }
+  function start(e){e.preventDefault();drawing=true;hasSig=true;const p=getPos(e);lastX=p.x;lastY=p.y;}
+  function move(e){
+    if(!drawing)return;
+    e.preventDefault();
+    const p=getPos(e);
+    ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(p.x,p.y);ctx.stroke();
+    lastX=p.x;lastY=p.y;
+  }
+  function end(){drawing=false;}
+
+  canvas.addEventListener('mousedown',start);
+  canvas.addEventListener('mousemove',move);
+  canvas.addEventListener('mouseup',end);
+  canvas.addEventListener('mouseleave',end);
+  canvas.addEventListener('touchstart',start,{passive:false});
+  canvas.addEventListener('touchmove',move,{passive:false});
+  canvas.addEventListener('touchend',end);
+
+  sigPads[canvasId]={canvas,ctx,hasSig:()=>hasSig,clear:()=>{ctx.clearRect(0,0,canvas.width,canvas.height);hasSig=false;}};
+}
+
+function limparAssinatura(id){
+  if(sigPads[id])sigPads[id].clear();
+}
+
+// ============ ENVIO ============
+async function enviarVisita(){
+  const c=contratoAtual;
+  const furos=lerFuros();
+  if(furos.length===0){alert('Adicione ao menos um furo executado nesta visita.');return;}
+
+  const tecnicoOk=sigPads['sig-tecnico']&&sigPads['sig-tecnico'].hasSig();
+  const respOk=sigPads['sig-responsavel']&&sigPads['sig-responsavel'].hasSig();
+  const nomeResp=document.getElementById('v-nome-responsavel-assinatura').value.trim();
+  if(!tecnicoOk){alert('Falta a assinatura do técnico executor.');return;}
+  if(!respOk||!nomeResp){alert('Falta o nome e a assinatura do responsável na obra.');return;}
+
+  const btn=document.getElementById('btn-enviar');
+  btn.disabled=true;btn.textContent='ENVIANDO...';
+
+  try{
+    const tipoEstrutura=[...document.querySelectorAll('#v-tipo-estrutura .check-chip.sel')].map(el=>el.dataset.val);
+    const totalPiso=parseInt(document.getElementById('v-total-piso').value)||0;
+    const totalViga=parseInt(document.getElementById('v-total-viga').value)||0;
+    const totalGeral=totalPiso+totalViga;
+
+    // Conta quantas visitas já existem para numerar esta
+    const qVisitas=window._fbQuery(window._fbCollection(window._fbDb,'visitas'),window._fbWhere('contratoId','==',c._docId));
+    const snapVisitas=await window._fbGetDocs(qVisitas);
+    const numeroVisita=snapVisitas.size+1;
+
+    const visita={
+      contratoId:c._docId,
+      contratoNum:c.id,
+      numeroVisita,
+      empresa:c.empresa,
+      enderecoObra:c.enderecoObra||'',
+      responsavelObra:document.getElementById('v-responsavel').value.trim(),
+      pisoAndar:document.getElementById('v-piso-andar').value.trim(),
+      data:document.getElementById('v-data').value,
+      horaInicio:document.getElementById('v-hora-inicio').value,
+      horaFim:document.getElementById('v-hora-fim').value,
+      tecnicoExecutor:document.getElementById('v-tecnico').value.trim(),
+      tipoEstrutura,
+      equipamento:document.getElementById('v-equipamento').value.trim(),
+      numSerie:document.getElementById('v-num-serie').value.trim(),
+      furos,
+      totalPiso,totalViga,totalGeral,
+      observacoes:document.getElementById('v-obs').value.trim(),
+      nomeResponsavelAssinatura:nomeResp,
+      assinaturaTecnico:sigPads['sig-tecnico'].canvas.toDataURL('image/png'),
+      assinaturaResponsavel:sigPads['sig-responsavel'].canvas.toDataURL('image/png'),
+      operadorUid:operadorAtual.uid,
+      operadorNome:operadorAtual.nome,
+      createdAt:new Date().toISOString()
+    };
+
+    await window._fbAddDoc(window._fbCollection(window._fbDb,'visitas'),visita);
+
+    // Atualiza o contrato: furos executados + resumo por bitola
+    const novoExecutado=(c.furosExecutados||0)+totalGeral;
+    const resumoAtual=c.resumoBitola||{};
+    furos.forEach(f=>{
+      if(!resumoAtual[f.diam])resumoAtual[f.diam]={piso:0,viga:0};
+      resumoAtual[f.diam][f.tipo]=(resumoAtual[f.diam][f.tipo]||0)+f.qtd;
+    });
+    const ref=window._fbDoc(window._fbDb,'contratos',c._docId);
+    await window._fbUpdateDoc(ref,{furosExecutados:novoExecutado,resumoBitola:resumoAtual});
+
+    // Alerta de excedente
+    if(novoExecutado>c.furosTotais && (c.furosExecutados||0)<=c.furosTotais){
+      dispararAlertaExcedente(c,novoExecutado);
+    }
+
+    alert('Visita registrada com sucesso!');
+    voltarLista();
+  }catch(e){
+    console.error(e);
+    alert('Erro ao enviar a visita. Verifique sua conexão e tente novamente.');
+  }finally{
+    btn.disabled=false;btn.textContent='ENVIAR REGISTRO DE VISITA';
+  }
+}
+
+function dispararAlertaExcedente(c,novoExecutado){
+  try{
+    if(typeof emailjs==='undefined')return;
+    const mensagem='ALERTA: O contrato '+c.id+' ('+c.empresa+') ULTRAPASSOU o limite de furos orçados!\n\nOrçado: '+c.furosTotais+'\nExecutado: '+novoExecutado+'\nExcedente: '+(novoExecutado-c.furosTotais)+'\n\nVerifique com o cliente antes de continuar a execução.';
+    emailjs.init({publicKey:'5SSLB95F3P6xEOY-V'});
+    emailjs.send('contato@jbrfuros.com.br','template_x5grpee',{
+      to_email:'contato@jbrfuros.com.br',
+      to_name:'Equipe JBR Furos',
+      codigo:mensagem,
+      from_name:'Sistema JBR Furos'
+    });
+  }catch(e){console.error('Erro ao disparar alerta de excedente:',e);}
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+</body>
+</html>

@@ -103,7 +103,7 @@
   };
 
   document.addEventListener('DOMContentLoaded', ()=>{
-    if(window._adminLogado) { carregarDoFirestore(); carregarContratosDoFirestore(); }
+    if(window._adminLogado) { carregarDoFirestore(); carregarContratosDoFirestore(); carregarOperadoresDoFirestore(); }
     else window._fbPendingLoad = true;
   });
 </script>
@@ -261,6 +261,7 @@ td{padding:11px 14px;font-size:12px;color:#333;}
     <div class="tab-nav">
       <button class="tab-btn active" onclick="switchTab('orcamentos',this)">Orçamentos</button>
       <button class="tab-btn" onclick="switchTab('contratos',this)">Contratos</button>
+      <button class="tab-btn" onclick="switchTab('operadores',this)">Operadores</button>
       <button class="tab-btn" onclick="switchTab('emails',this)">Banco de E-mails</button>
     </div>
 
@@ -278,7 +279,7 @@ td{padding:11px 14px;font-size:12px;color:#333;}
           <option value="revisado">Revisado</option>
           <option value="enviado">Enviado</option>
           <option value="aprovado">Aprovado</option>
-          <option value="recusado">Recusado</option>
+          <option value="recusado">Obra Perdida</option>
         </select>
         <button class="btn-export" onclick="exportarCSV()">↓ Exportar CSV</button>
         <button class="btn-export" style="background:#A32D2D;" onclick="limparTodosOrcamentos()">🗑 Limpar todos</button>
@@ -345,6 +346,62 @@ td{padding:11px 14px;font-size:12px;color:#333;}
         <div class="empty-state" id="empty-state-contratos" style="display:none;">
           <i class="ti ti-file-off" aria-hidden="true"></i>
           Nenhum contrato encontrado.
+        </div>
+      </div>
+    </div>
+
+    <!-- OPERADORES -->
+    <div class="tab-content" id="tab-operadores">
+      <div class="stats" id="stats-operadores"></div>
+
+      <div class="filters" style="justify-content:space-between;">
+        <div style="display:flex;gap:10px;align-items:center;">
+          <label>Buscar:</label>
+          <input type="text" id="busca-operador" placeholder="Nome ou e-mail..." oninput="renderOperadores()" style="min-width:220px;"/>
+        </div>
+        <button class="btn-enviar" style="background:#0A6B3B;" onclick="abrirModalOperador()"><i class="ti ti-plus" aria-hidden="true"></i> Novo Operador</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Cadastrado em</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-operadores-body"></tbody>
+        </table>
+        <div class="empty-state" id="empty-state-operadores" style="display:none;">
+          <i class="ti ti-users" aria-hidden="true"></i>
+          Nenhum operador cadastrado ainda.
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Novo Operador -->
+    <div class="modal-bg" id="modal-operador-bg">
+      <div class="modal" style="max-width:420px;padding:24px;">
+        <button class="modal-close" onclick="closeModalOperador()">✕</button>
+        <h3 style="margin-bottom:16px;">Novo Operador</h3>
+        <div class="fg" style="margin-bottom:12px;">
+          <label>Nome completo</label>
+          <input type="text" id="op-nome" placeholder="Ex: João da Silva"/>
+        </div>
+        <div class="fg" style="margin-bottom:12px;">
+          <label>E-mail de login</label>
+          <input type="email" id="op-email" placeholder="joao@jbrfuros.com.br"/>
+        </div>
+        <div class="fg" style="margin-bottom:16px;">
+          <label>Senha inicial</label>
+          <input type="text" id="op-senha" placeholder="Mínimo 6 caracteres"/>
+        </div>
+        <div class="btn-row">
+          <button class="btn-cancelar" onclick="closeModalOperador()">Cancelar</button>
+          <button class="btn-enviar" style="background:#0A6B3B;" onclick="criarOperador()">Cadastrar Operador</button>
         </div>
       </div>
     </div>
@@ -453,7 +510,7 @@ td{padding:11px 14px;font-size:12px;color:#333;}
         <button class="btn-cancelar" onclick="closeModal()">Cancelar</button>
         <button class="btn-pdf" onclick="gerarPDFAdmin()"><i class="ti ti-file-download" aria-hidden="true"></i> Baixar PDF revisado</button>
         <button class="btn-enviar" onclick="marcarEnviado()"><i class="ti ti-check" aria-hidden="true"></i> Marcar como enviado</button>
-        <button class="btn-enviar" style="background:#A32D2D;" onclick="recusarOrcamento()"><i class="ti ti-x" aria-hidden="true"></i> Recusar</button>
+        <button class="btn-enviar" style="background:#A32D2D;" onclick="recusarOrcamento()"><i class="ti ti-x" aria-hidden="true"></i> Obra Perdida</button>
         <button class="btn-enviar" style="background:#0A6B3B;" onclick="aprovarOrcamento()"><i class="ti ti-check" aria-hidden="true"></i> Aprovar e Gerar Contrato</button>
       </div>
     </div>
@@ -472,7 +529,7 @@ function doLogin(){
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='block';
     window._adminLogado=true;
-    if(window._carregarDoFirestore){ window._carregarDoFirestore(); window._carregarContratosDoFirestore(); }
+    if(window._carregarDoFirestore){ window._carregarDoFirestore(); window._carregarContratosDoFirestore(); window._carregarOperadoresDoFirestore(); }
     else { renderStats();renderTabela();renderEmails(); }
   } else {
     document.getElementById('login-error').style.display='block';
@@ -514,11 +571,13 @@ async function aprovarOrcamento(){
     telefone:o.telefone||'',
     email:o.email||'',
     municipio:o.municipio||'',
+    enderecoObra:o.local||'',
     dataInicio:o.dataInicio||'',
     prazoConclusao:prazoInput,
     itens:o.itens||[],
     furosTotais:furosTotais,
     furosExecutados:0,
+    resumoBitola:{},
     valorTotal:parseFloat(o.totalFinal||o.total||0),
     status:'ativo',
     dataCriacao:new Date().toISOString()
@@ -540,7 +599,7 @@ async function aprovarOrcamento(){
 
 function recusarOrcamento(){
   if(!orcAtual)return;
-  if(!confirm('Confirma recusar este orçamento? Ele será marcado como perdido.'))return;
+  if(!confirm('Confirma marcar esta obra como perdida? O orçamento sairá da fila de pendentes.'))return;
   const data=getOrcamentos();
   data[orcAtual.idx].status='recusado';
   saveOrcamentos(data);
@@ -554,9 +613,13 @@ function renderStats(){
   const data=getOrcamentos();
   const total=data.reduce((s,o)=>s+parseFloat(o.total||0),0);
   const comDesc=data.filter(o=>parseFloat(o.desconto||0)>0).length;
+  const volumeFechado=data.filter(o=>o.status==='aprovado').reduce((s,o)=>s+parseFloat(o.totalFinal||o.total||0),0);
+  const volumePerdido=data.filter(o=>o.status==='recusado').reduce((s,o)=>s+parseFloat(o.totalFinal||o.total||0),0);
   document.getElementById('stats-bar').innerHTML=`
     <div class="stat-card"><div class="stat-label">Total de orçamentos</div><div class="stat-val">${data.length}</div></div>
     <div class="stat-card"><div class="stat-label">Volume total orçado</div><div class="stat-val orange">${fmt(total)}</div></div>
+    <div class="stat-card"><div class="stat-label">Volume total fechado</div><div class="stat-val" style="color:#0A6B3B;">${fmt(volumeFechado)}</div></div>
+    <div class="stat-card"><div class="stat-label">Volume total perdido</div><div class="stat-val" style="color:#A32D2D;">${fmt(volumePerdido)}</div></div>
     <div class="stat-card"><div class="stat-label">Com desconto</div><div class="stat-val">${comDesc}</div></div>
     <div class="stat-card"><div class="stat-label">E-mails cadastrados</div><div class="stat-val">${[...new Set(data.map(o=>o.email))].length}</div></div>
   `;
@@ -577,7 +640,7 @@ function renderTabela(){
   empty.style.display='none';
   const statusBadge=(s)=>{
     const map={gerado:'badge-gerado',revisado:'badge-revisado',enviado:'badge-enviado',aprovado:'badge-aprovado',recusado:'badge-recusado'};
-    const label={gerado:'Gerado',revisado:'Revisado',enviado:'Enviado',aprovado:'Aprovado',recusado:'Recusado'};
+    const label={gerado:'Gerado',revisado:'Revisado',enviado:'Enviado',aprovado:'Aprovado',recusado:'Obra Perdida'};
     return `<span class="badge-status ${map[s]||'badge-gerado'}">${label[s]||'Gerado'}</span>`;
   };
   tbody.innerHTML=filtered.reverse().map((o,i)=>{
@@ -690,6 +753,132 @@ function encerrarContrato(docId){
   data[idx].status='encerrado';
   saveContratos(data);
   renderContratos();
+}
+
+function getOperadores(){return JSON.parse(localStorage.getItem('jbr_operadores')||'[]');}
+
+async function carregarOperadoresDoFirestore(){
+  try{
+    const snap = await window._fbGetDocs(window._fbCollection(db,'operadores'));
+    const data = [];
+    snap.forEach(d => data.push({...d.data(), _docId: d.id}));
+    localStorage.setItem('jbr_operadores', JSON.stringify(data));
+    if(window._adminLogado && typeof renderOperadores==='function') renderOperadores();
+  } catch(e){ console.error('Erro ao carregar operadores:', e); }
+}
+window._carregarOperadoresDoFirestore = carregarOperadoresDoFirestore;
+
+function abrirModalOperador(){
+  document.getElementById('op-nome').value='';
+  document.getElementById('op-email').value='';
+  document.getElementById('op-senha').value='';
+  document.getElementById('modal-operador-bg').classList.add('show');
+}
+function closeModalOperador(){
+  document.getElementById('modal-operador-bg').classList.remove('show');
+}
+
+async function criarOperador(){
+  const nome=document.getElementById('op-nome').value.trim();
+  const email=document.getElementById('op-email').value.trim();
+  const senha=document.getElementById('op-senha').value;
+  if(!nome||!email||!senha){alert('Preencha todos os campos.');return;}
+  if(senha.length<6){alert('A senha precisa ter no mínimo 6 caracteres.');return;}
+
+  try{
+    // Cria o login via REST API do Firebase (não afeta a sessão logada do admin)
+    const resp=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email,password:senha,returnSecureToken:true})
+    });
+    const result=await resp.json();
+    if(result.error){
+      alert('Erro ao criar operador: '+(result.error.message==='EMAIL_EXISTS'?'Este e-mail já está cadastrado.':result.error.message));
+      return;
+    }
+    const uid=result.localId;
+    const operador={uid,nome,email,ativo:true,createdAt:new Date().toISOString()};
+    const docId=await window._fbAddDoc(window._fbCollection(db,'operadores'),operador);
+    const operadoresLocais=getOperadores();
+    operadoresLocais.unshift({...operador,_docId:docId.id});
+    localStorage.setItem('jbr_operadores',JSON.stringify(operadoresLocais));
+    closeModalOperador();
+    renderOperadores();
+    alert('Operador '+nome+' cadastrado com sucesso!');
+  }catch(e){
+    console.error(e);
+    alert('Erro ao cadastrar operador. Veja o console para detalhes.');
+  }
+}
+
+function operadorBadge(ativo){
+  return ativo!==false
+    ? '<span class="badge-status badge-ativo">Ativo</span>'
+    : '<span class="badge-status badge-encerrado">Inativo</span>';
+}
+
+function renderOperadores(){
+  const data=getOperadores();
+  const buscaEl=document.getElementById('busca-operador');
+  if(!buscaEl)return;
+  const busca=(buscaEl.value||'').toLowerCase();
+  const filtered=data.filter(o=>(o.nome||'').toLowerCase().includes(busca)||(o.email||'').toLowerCase().includes(busca));
+  const tbody=document.getElementById('tabela-operadores-body');
+  const empty=document.getElementById('empty-state-operadores');
+  const statsEl=document.getElementById('stats-operadores');
+  if(statsEl){
+    const ativos=data.filter(o=>o.ativo!==false).length;
+    statsEl.innerHTML=`
+      <div class="stat-card"><div class="stat-label">Total de operadores</div><div class="stat-val">${data.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Operadores ativos</div><div class="stat-val orange">${ativos}</div></div>
+    `;
+  }
+  if(filtered.length===0){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  tbody.innerHTML=filtered.map(o=>{
+    const data_=o.createdAt?new Date(o.createdAt).toLocaleDateString('pt-BR'):'—';
+    return `<tr>
+      <td><strong>${o.nome||'—'}</strong></td>
+      <td>${o.email||'—'}</td>
+      <td>${data_}</td>
+      <td>${operadorBadge(o.ativo)}</td>
+      <td style="display:flex;gap:5px;">
+        <button class="action-btn" onclick="resetarSenhaOperador('${o.email}')">Redefinir senha</button>
+        <button class="action-btn ${o.ativo!==false?'':'orange'}" onclick="toggleOperador('${o._docId}',${o.ativo===false})">${o.ativo!==false?'Desativar':'Ativar'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function toggleOperador(docId,novoStatus){
+  const data=getOperadores();
+  const idx=data.findIndex(o=>o._docId===docId);
+  if(idx<0)return;
+  data[idx].ativo=novoStatus;
+  localStorage.setItem('jbr_operadores',JSON.stringify(data));
+  try{
+    const ref=window._fbDoc(db,'operadores',docId);
+    await window._fbUpdateDoc(ref,{ativo:novoStatus});
+  }catch(e){console.error('Erro ao atualizar status do operador:',e);}
+  renderOperadores();
+}
+
+async function resetarSenhaOperador(email){
+  if(!confirm('Enviar e-mail de redefinição de senha para '+email+'?'))return;
+  try{
+    const resp=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({requestType:'PASSWORD_RESET',email})
+    });
+    const result=await resp.json();
+    if(result.error){alert('Erro: '+result.error.message);return;}
+    alert('E-mail de redefinição enviado para '+email+'.');
+  }catch(e){
+    console.error(e);
+    alert('Erro ao enviar e-mail de redefinição.');
+  }
 }
 
 function renderEmails(){
@@ -1007,6 +1196,7 @@ function switchTab(id,el){
   document.getElementById('tab-'+id).classList.add('show');
   if(id==='emails')renderEmails();
   if(id==='contratos')renderContratos();
+  if(id==='operadores')renderOperadores();
 }
 </script>
 </body>

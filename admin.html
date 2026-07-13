@@ -11,7 +11,7 @@
   import { getFirestore, collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
   const firebaseConfig = {
-    apiKey: "AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ",
+    apiKey: "AIzaSyCQiBTAjgZ8gEx-RkolXXO0p3cLg9WKOnQ",
     authDomain: "jbr-furos.firebaseapp.com",
     projectId: "jbr-furos",
     storageBucket: "jbr-furos.firebasestorage.app",
@@ -787,7 +787,7 @@ async function criarOperador(){
 
   try{
     // Cria o login via REST API do Firebase (não afeta a sessão logada do admin)
-    const resp=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ',{
+    const resp=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyCQiBTAjgZ8gEx-RkolXXO0p3cLg9WKOnQ',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({email,password:senha,returnSecureToken:true})
@@ -867,7 +867,7 @@ async function toggleOperador(docId,novoStatus){
 async function resetarSenhaOperador(email){
   if(!confirm('Enviar e-mail de redefinição de senha para '+email+'?'))return;
   try{
-    const resp=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ',{
+    const resp=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=AIzaSyCQiBTAjgZ8gEx-RkolXXO0p3cLg9WKOnQ',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({requestType:'PASSWORD_RESET',email})

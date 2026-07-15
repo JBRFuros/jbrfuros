@@ -11,7 +11,7 @@
   import { getFirestore, collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
   const firebaseConfig = {
-    apiKey: "AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ",
+    apiKey: "AIzaSyCQiBTAjgZ8gEx-RkolXXO0p3cLg9WKOnQ",
     authDomain: "jbr-furos.firebaseapp.com",
     projectId: "jbr-furos",
     storageBucket: "jbr-furos.firebasestorage.app",
@@ -571,19 +571,23 @@ async function aprovarOrcamento(){
     telefone:o.telefone||'',
     email:o.email||'',
     municipio:o.municipio||'',
+    enderecoObra:o.local||'',
     dataInicio:o.dataInicio||'',
     prazoConclusao:prazoInput,
     itens:o.itens||[],
     furosTotais:furosTotais,
     furosExecutados:0,
+    resumoBitola:{},
     valorTotal:parseFloat(o.totalFinal||o.total||0),
     status:'ativo',
     dataCriacao:new Date().toISOString()
   };
 
+  let contratoCriado=false;
   if(window._criarContratoNoFirestore){
     const docId=await window._criarContratoNoFirestore(contrato);
     if(docId){
+      contratoCriado=true;
       const contratosLocais=getContratos();
       contratosLocais.unshift({...contrato,_docId:docId});
       localStorage.setItem('jbr_contratos',JSON.stringify(contratosLocais));
@@ -592,7 +596,11 @@ async function aprovarOrcamento(){
   renderStats();renderTabela();
   if(typeof renderContratos==='function')renderContratos();
   closeModal();
-  alert('Orçamento aprovado! Contrato '+numContrato+' criado com sucesso.');
+  if(contratoCriado){
+    alert('Orçamento aprovado! Contrato '+numContrato+' criado com sucesso.');
+  } else {
+    alert('ATENÇÃO: o orçamento foi aprovado, mas houve um ERRO ao salvar o contrato no banco de dados. Verifique o Console (F12) e as regras do Firestore, depois tente aprovar novamente ou cadastre o contrato manualmente.');
+  }
 }
 
 function recusarOrcamento(){
@@ -757,7 +765,7 @@ function getOperadores(){return JSON.parse(localStorage.getItem('jbr_operadores'
 
 async function carregarOperadoresDoFirestore(){
   try{
-    const snap = await window._fbGetDocs(window._fbCollection(db,'operadores'));
+    const snap = await window._fbGetDocs(window._fbCollection(window._fbDb,'operadores'));
     const data = [];
     snap.forEach(d => data.push({...d.data(), _docId: d.id}));
     localStorage.setItem('jbr_operadores', JSON.stringify(data));
@@ -785,7 +793,7 @@ async function criarOperador(){
 
   try{
     // Cria o login via REST API do Firebase (não afeta a sessão logada do admin)
-    const resp=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ',{
+    const resp=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyCQiBTAjgZ8gEx-RkolXXO0p3cLg9WKOnQ',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({email,password:senha,returnSecureToken:true})
@@ -797,7 +805,7 @@ async function criarOperador(){
     }
     const uid=result.localId;
     const operador={uid,nome,email,ativo:true,createdAt:new Date().toISOString()};
-    const docId=await window._fbAddDoc(window._fbCollection(db,'operadores'),operador);
+    const docId=await window._fbAddDoc(window._fbCollection(window._fbDb,'operadores'),operador);
     const operadoresLocais=getOperadores();
     operadoresLocais.unshift({...operador,_docId:docId.id});
     localStorage.setItem('jbr_operadores',JSON.stringify(operadoresLocais));
@@ -856,7 +864,7 @@ async function toggleOperador(docId,novoStatus){
   data[idx].ativo=novoStatus;
   localStorage.setItem('jbr_operadores',JSON.stringify(data));
   try{
-    const ref=window._fbDoc(db,'operadores',docId);
+    const ref=window._fbDoc(window._fbDb,'operadores',docId);
     await window._fbUpdateDoc(ref,{ativo:novoStatus});
   }catch(e){console.error('Erro ao atualizar status do operador:',e);}
   renderOperadores();
@@ -865,7 +873,7 @@ async function toggleOperador(docId,novoStatus){
 async function resetarSenhaOperador(email){
   if(!confirm('Enviar e-mail de redefinição de senha para '+email+'?'))return;
   try{
-    const resp=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=AIzaSyCQiBTAjgZ8gEx-RkolXX00p3cLg9WK0nQ',{
+    const resp=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=AIzaSyCQiBTAjgZ8gEx-RkolXXO0p3cLg9WKOnQ',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({requestType:'PASSWORD_RESET',email})

@@ -542,11 +542,31 @@ td{padding:11px 14px;font-size:12px;color:#333;}
         <div class="info-grid" id="modal-info"></div>
       </div>
       <div class="modal-section">
-        <div class="modal-section-title">Itens do orçamento</div>
+        <div class="modal-section-title">Itens do orçamento (escopo) — editável</div>
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead><tr style="background:#f0ebe3;"><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Diâmetro</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Tipo</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Prof.</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Qtd</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Unit/cm</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Subtotal</th></tr></thead>
+          <thead><tr style="background:#f0ebe3;"><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Diâmetro</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Tipo</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Prof.</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Qtd</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Unit/cm</th><th style="padding:6px 10px;text-align:left;font-size:10px;color:#666;font-weight:600;text-transform:uppercase;">Subtotal</th><th></th></tr></thead>
           <tbody id="modal-itens"></tbody>
         </table>
+        <div class="filters" style="margin-top:10px;">
+          <select id="modal-add-diam" style="flex:1;min-width:150px;">
+            <option value="1">1 1/4 (31,75 mm)</option>
+            <option value="2">2 1/4 (57,15 mm)</option>
+            <option value="3">3 1/4 (82,55 mm)</option>
+            <option value="4" selected>4 1/4 (107,95 mm)</option>
+            <option value="5">5 1/4 (133,35 mm)</option>
+            <option value="6">6 1/4 (158,75 mm)</option>
+            <option value="7">7 1/4 (184,15 mm)</option>
+            <option value="8">8 1/4 (209,55 mm)</option>
+            <option value="9">10 1/4 (260,35 mm)</option>
+          </select>
+          <input type="number" id="modal-add-prof" placeholder="Prof (cm)" min="1" style="flex:1;min-width:110px;"/>
+          <input type="number" id="modal-add-qtd" placeholder="Qtd" min="1" value="1" style="flex:1;min-width:90px;"/>
+          <select id="modal-add-tipo" style="flex:1;min-width:130px;">
+            <option value="piso">Piso/Laje</option>
+            <option value="viga">Viga/Pilar</option>
+          </select>
+          <button class="action-btn" style="background:#eaf3de;color:#27500A;" onclick="adicionarItemModal()">+ Adicionar ao escopo</button>
+        </div>
         <div id="modal-resumo" style="margin-top:.75rem;background:#f7f4ef;border-radius:8px;padding:.75rem 1rem;font-size:12px;color:#2D3A39;"></div>
       </div>
       <div class="modal-section">
@@ -611,6 +631,7 @@ td{padding:11px 14px;font-size:12px;color:#333;}
 const SENHA_USER='jbr';
 const SENHA_PASS='jbr@2026';
 let orcAtual=null;
+let itensModal=[];
 
 const TABELA_ADMIN={
   1:{nome:'1 1/4 (31,75 mm)',piso:1.90,viga:2.47},
@@ -1428,6 +1449,68 @@ function renderEmails(){
   </tr>`).join('');
 }
 
+function renderModalItens(){
+  const tbody=document.getElementById('modal-itens');
+  tbody.innerHTML=itensModal.map((it,i)=>{
+    const sub=it.qtd*it.prof*it.preco;
+    return `<tr style="border-bottom:.5px solid #f0ebe3;">
+      <td style="padding:6px 10px;">${it.nome}</td>
+      <td style="padding:6px 10px;">${it.tipo==='piso'?'Piso':'Viga/Pilar'}</td>
+      <td style="padding:6px 10px;"><input type="number" value="${it.prof}" min="1" style="width:60px;padding:4px;font-size:12px;" onchange="atualizarItemModal(${i},'prof',this.value)"/></td>
+      <td style="padding:6px 10px;"><input type="number" value="${it.qtd}" min="1" style="width:50px;padding:4px;font-size:12px;" onchange="atualizarItemModal(${i},'qtd',this.value)"/></td>
+      <td style="padding:6px 10px;">R$ ${it.preco.toFixed(2).replace('.',',')}</td>
+      <td style="padding:6px 10px;font-weight:600;">R$ ${sub.toFixed(2).replace('.',',')}</td>
+      <td style="padding:6px 10px;"><button class="action-btn" style="color:#A32D2D;" onclick="removerItemModal(${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  let subFuros=0,totalFurosM=0;
+  itensModal.forEach(it=>{subFuros+=it.qtd*it.prof*it.preco;totalFurosM+=it.qtd;});
+  const visitasM=Math.ceil(totalFurosM/8)||1;
+  let mobM=0,taxMinM=0;
+  if(totalFurosM>0&&totalFurosM<=8){taxMinM=1200;}
+  else if(totalFurosM>8){mobM=visitasM*800;}
+  const totalM=subFuros+mobM+taxMinM;
+  const resumoEl=document.getElementById('modal-resumo');
+  resumoEl.innerHTML=`
+    <div style="display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;margin-bottom:.5rem;">
+      <span>Furos: <strong>${totalFurosM}</strong></span>
+      ${mobM>0?`<span>Visitas: <strong style="color:#C95227;">${visitasM} × R$ 800,00 = R$ ${mobM.toFixed(2).replace('.',',')}</strong></span>`:''}
+      ${taxMinM>0?`<span>Taxa de visita: <strong>R$ ${taxMinM.toFixed(2).replace('.',',')}</strong></span>`:''}
+    </div>
+    <div style="font-size:13px;font-weight:700;color:#2D3A39;border-top:.5px solid #e8e2d9;padding-top:.5rem;">
+      Total original (escopo atual): <span style="color:#C95227;font-size:15px;">R$ ${totalM.toFixed(2).replace('.',',')}</span>
+    </div>`;
+}
+
+function atualizarItemModal(i,campo,valor){
+  const num=parseFloat(valor)||0;
+  if(num<=0){alert('O valor deve ser maior que zero.');renderModalItens();return;}
+  itensModal[i][campo]=num;
+  renderModalItens();
+}
+
+function removerItemModal(i){
+  if(itensModal.length<=1){alert('O orçamento precisa ter ao menos um item.');return;}
+  if(!confirm('Remover este item do escopo?'))return;
+  itensModal.splice(i,1);
+  renderModalItens();
+}
+
+function adicionarItemModal(){
+  const diam=document.getElementById('modal-add-diam').value;
+  const prof=parseFloat(document.getElementById('modal-add-prof').value);
+  const qtd=parseInt(document.getElementById('modal-add-qtd').value);
+  const tipo=document.getElementById('modal-add-tipo').value;
+  if(!prof||prof<=0){alert('Informe a profundidade do furo.');return;}
+  if(!qtd||qtd<=0){alert('Informe a quantidade de furos.');return;}
+  const info=TABELA_ADMIN[diam];
+  itensModal.push({diam,nome:info.nome,tipo,prof,qtd,preco:tipo==='piso'?info.piso:info.viga});
+  document.getElementById('modal-add-prof').value='';
+  document.getElementById('modal-add-qtd').value='1';
+  renderModalItens();
+}
+
 function abrirModal(idx){
   const data=getOrcamentos();
   orcAtual={entry:data[idx],idx};
@@ -1444,36 +1527,8 @@ function abrirModal(idx){
     <div class="info-item"><div class="info-label">Total original</div><div class="info-val" style="color:#C95227;font-size:15px;">${fmt(o.total||0)}</div></div>
     <div class="info-item"><div class="info-label">Status</div><div class="info-val">${o.status||'gerado'}</div></div>
   `;
-  const itens=o.itens||[];
-  document.getElementById('modal-itens').innerHTML=itens.map(it=>{
-    const sub=it.qtd*it.prof*it.preco;
-    return `<tr style="border-bottom:.5px solid #f0ebe3;">
-      <td style="padding:6px 10px;">${it.nome}</td>
-      <td style="padding:6px 10px;">${it.tipo==='piso'?'Piso':'Viga/Pilar'}</td>
-      <td style="padding:6px 10px;">${it.prof} cm</td>
-      <td style="padding:6px 10px;">${it.qtd}</td>
-      <td style="padding:6px 10px;">R$ ${it.preco.toFixed(2).replace('.',',')}</td>
-      <td style="padding:6px 10px;font-weight:600;">R$ ${sub.toFixed(2).replace('.',',')}</td>
-    </tr>`;
-  }).join('');
-  // Calcular e exibir resumo
-  let subFuros=0,totalFurosM=0;
-  itens.forEach(it=>{subFuros+=it.qtd*it.prof*it.preco;totalFurosM+=it.qtd;});
-  const visitasM=Math.ceil(totalFurosM/8)||1;
-  let mobM=0,taxMinM=0;
-  if(totalFurosM>0&&totalFurosM<=8){if(subFuros<1200)taxMinM=1200-subFuros;}
-  else if(totalFurosM>8){mobM=visitasM*800;}
-  const totalM=subFuros+mobM+taxMinM;
-  const resumoEl=document.getElementById('modal-resumo');
-  resumoEl.innerHTML=`
-    <div style="display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;margin-bottom:.5rem;">
-      <span>Furos: <strong>${totalFurosM}</strong></span>
-      <span>Visitas: <strong style="color:#C95227;">${visitasM} × R$ 800,00 = R$ ${mobM.toFixed(2).replace('.',',')}</strong></span>
-      ${taxMinM>0?`<span>Taxa mínima: <strong>R$ ${taxMinM.toFixed(2).replace('.',',')}</strong></span>`:''}
-    </div>
-    <div style="font-size:13px;font-weight:700;color:#2D3A39;border-top:.5px solid #e8e2d9;padding-top:.5rem;">
-      Total original: <span style="color:#C95227;font-size:15px;">R$ ${totalM.toFixed(2).replace('.',',')}</span>
-    </div>`;
+  itensModal=JSON.parse(JSON.stringify(o.itens||[]));
+  renderModalItens();
   document.getElementById('desc-tipo').value=o.descontoTipo||'valor';
   document.getElementById('desc-valor').value=parseFloat(o.desconto||0)||'';
   document.getElementById('desc-ddl').value=o.faturamentoDDL||15;
@@ -1514,7 +1569,15 @@ function salvarDesconto(){
   const tipo=document.getElementById('desc-tipo').value;
   const val=parseFloat(document.getElementById('desc-valor').value)||0;
   const motivo=document.getElementById('desc-motivo').value;
-  const totalOrig=parseFloat(data[orcAtual.idx].total||0);
+
+  let subFuros=0,totalFurosCalc=0;
+  itensModal.forEach(it=>{subFuros+=it.qtd*it.prof*it.preco;totalFurosCalc+=it.qtd;});
+  const visitasCalc=Math.ceil(totalFurosCalc/8)||1;
+  let mobCalc=0,taxMinCalc=0;
+  if(totalFurosCalc>0&&totalFurosCalc<=8){taxMinCalc=1200;}
+  else if(totalFurosCalc>8){mobCalc=visitasCalc*800;}
+  const totalOrig=subFuros+mobCalc+taxMinCalc;
+
   let totalFinal=totalOrig;
   if(tipo==='percent')totalFinal=totalOrig*(1-val/100);
   else totalFinal=totalOrig-val;
@@ -1522,6 +1585,10 @@ function salvarDesconto(){
   const ddlVal=parseInt(document.getElementById('desc-ddl').value)||15;
   const prazoVal=document.getElementById('desc-prazo').value||'';
   const revNum=(data[orcAtual.idx].numRevisao||0)+1;
+  data[orcAtual.idx].itens=JSON.parse(JSON.stringify(itensModal));
+  data[orcAtual.idx].totalFuros=totalFurosCalc;
+  data[orcAtual.idx].visitas=visitasCalc;
+  data[orcAtual.idx].total=totalOrig;
   data[orcAtual.idx].desconto=val;
   data[orcAtual.idx].descontoTipo=tipo;
   data[orcAtual.idx].descontoMotivo=motivo;

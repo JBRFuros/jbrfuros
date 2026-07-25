@@ -405,6 +405,21 @@ td{padding:11px 14px;font-size:12px;color:#333;}
     <div class="tab-content" id="tab-contratos">
       <div class="stats" id="stats-contratos"></div>
 
+      <div class="card-panel" style="background:#fff;border-radius:12px;padding:16px 18px;margin-bottom:16px;">
+        <div style="font-size:12px;color:#888;margin-bottom:10px;">Agenda de contratos (início → término previsto)</div>
+        <div style="display:flex;gap:16px;margin-bottom:10px;font-size:11px;color:#666;">
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#639922;"></span>Em dia</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#BA7517;"></span>Atrasado</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#888780;"></span>Concluído</span>
+        </div>
+        <div id="agenda-header" style="display:grid;grid-template-columns:150px 1fr;font-size:10px;color:#999;margin-bottom:6px;"></div>
+        <div id="agenda-rows"></div>
+        <div class="empty-state" id="agenda-empty" style="display:none;padding:1.5rem 1rem;">
+          <i class="ti ti-calendar-off" aria-hidden="true"></i>
+          Nenhum contrato com datas definidas ainda.
+        </div>
+      </div>
+
       <div class="filters">
         <label>Buscar:</label>
         <input type="text" id="busca-contrato" placeholder="Nome, empresa, CNPJ ou nº contrato..." oninput="renderContratos()" style="min-width:260px;"/>
@@ -598,7 +613,11 @@ td{padding:11px 14px;font-size:12px;color:#333;}
               <input type="number" id="desc-ddl" min="1" value="15" placeholder="15"/>
             </div>
             <div class="fg" style="flex:0 0 auto;max-width:170px;">
-              <label>Prazo de conclusão</label>
+              <label>Início dos serviços</label>
+              <input type="date" id="desc-inicio"/>
+            </div>
+            <div class="fg" style="flex:0 0 auto;max-width:170px;">
+              <label>Término previsto</label>
               <input type="date" id="desc-prazo"/>
             </div>
           </div>
@@ -884,8 +903,75 @@ function fmtData(iso){
   return d+'/'+m+'/'+y;
 }
 
+function corSituacaoContrato(c){
+  if((c.status||'ativo')==='encerrado')return '#888780';
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  const prazo=new Date(c.prazoConclusao+'T00:00:00');
+  if(hoje>prazo)return '#BA7517';
+  return '#639922';
+}
+
+function parseDataInicioBR(str){
+  if(!str)return null;
+  const partes=str.split('/');
+  if(partes.length!==3)return null;
+  const [d,m,y]=partes;
+  const dt=new Date(parseInt(y),parseInt(m)-1,parseInt(d));
+  return isNaN(dt.getTime())?null:dt;
+}
+
+function renderAgendaContratos(data){
+  const headerEl=document.getElementById('agenda-header');
+  const rowsEl=document.getElementById('agenda-rows');
+  const emptyEl=document.getElementById('agenda-empty');
+  if(!headerEl||!rowsEl)return;
+
+  const validos=data.filter(c=>(c.status||'ativo')!=='cancelado').map(c=>{
+    const inicio=parseDataInicioBR(c.dataInicio);
+    const fim=c.prazoConclusao?new Date(c.prazoConclusao+'T00:00:00'):null;
+    return{...c,_inicio:inicio,_fim:fim};
+  }).filter(c=>c._inicio&&c._fim&&c._fim>=c._inicio);
+
+  if(validos.length===0){
+    headerEl.innerHTML='';rowsEl.innerHTML='';emptyEl.style.display='block';return;
+  }
+  emptyEl.style.display='none';
+
+  let janelaInicio=new Date(Math.min(...validos.map(c=>c._inicio.getTime())));
+  let janelaFim=new Date(Math.max(...validos.map(c=>c._fim.getTime())));
+  janelaInicio.setDate(janelaInicio.getDate()-2);
+  janelaFim.setDate(janelaFim.getDate()+2);
+  const totalMs=janelaFim.getTime()-janelaInicio.getTime()||1;
+
+  const numMarcos=4;
+  let headerHtml='<div></div><div style="display:grid;grid-template-columns:repeat('+numMarcos+',1fr);">';
+  for(let i=0;i<numMarcos;i++){
+    const dt=new Date(janelaInicio.getTime()+(totalMs*i/numMarcos));
+    headerHtml+='<div>'+dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})+'</div>';
+  }
+  headerHtml+='</div>';
+  headerEl.innerHTML=headerHtml;
+
+  validos.sort((a,b)=>a._inicio-b._inicio);
+  rowsEl.innerHTML=validos.map(c=>{
+    const left=((c._inicio.getTime()-janelaInicio.getTime())/totalMs*100).toFixed(2);
+    const width=Math.max(2,((c._fim.getTime()-c._inicio.getTime())/totalMs*100)).toFixed(2);
+    const cor=corSituacaoContrato(c);
+    return `<div style="display:grid;grid-template-columns:150px 1fr;align-items:center;padding:7px 0;border-top:.5px solid #f0ebe3;">
+      <div style="font-size:11px;">
+        <div style="font-family:monospace;color:#C95227;font-size:10px;">${c.id||''}</div>
+        <div style="color:#666;">${c.empresa||''}</div>
+      </div>
+      <div style="position:relative;height:18px;background:#f7f4ef;border-radius:4px;">
+        <div title="${c.id} — ${c.empresa}" style="position:absolute;left:${left}%;width:${width}%;height:100%;background:${cor};border-radius:4px;"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderContratos(){
   const data=getContratos();
+  renderAgendaContratos(data);
   const buscaEl=document.getElementById('busca-contrato');
   const filtroEl=document.getElementById('filtro-status-contrato');
   if(!buscaEl||!filtroEl)return;
@@ -1532,6 +1618,7 @@ function abrirModal(idx){
   document.getElementById('desc-tipo').value=o.descontoTipo||'valor';
   document.getElementById('desc-valor').value=parseFloat(o.desconto||0)||'';
   document.getElementById('desc-ddl').value=o.faturamentoDDL||15;
+  document.getElementById('desc-inicio').value=o.dataInicio?o.dataInicio.split('/').reverse().join('-'):'';
   document.getElementById('desc-prazo').value=o.prazoConclusao||'';
   const revAtual=(o.numRevisao||0)+1;
   document.getElementById('desc-revisao-label').textContent='REV '+revAtual;
@@ -1583,6 +1670,7 @@ function salvarDesconto(){
   else totalFinal=totalOrig-val;
   if(totalFinal<0)totalFinal=0;
   const ddlVal=parseInt(document.getElementById('desc-ddl').value)||15;
+  const inicioRaw=document.getElementById('desc-inicio').value;
   const prazoVal=document.getElementById('desc-prazo').value||'';
   const revNum=(data[orcAtual.idx].numRevisao||0)+1;
   data[orcAtual.idx].itens=JSON.parse(JSON.stringify(itensModal));
@@ -1593,6 +1681,7 @@ function salvarDesconto(){
   data[orcAtual.idx].descontoTipo=tipo;
   data[orcAtual.idx].descontoMotivo=motivo;
   data[orcAtual.idx].faturamentoDDL=ddlVal;
+  if(inicioRaw)data[orcAtual.idx].dataInicio=inicioRaw.split('-').reverse().join('/');
   data[orcAtual.idx].prazoConclusao=prazoVal;
   data[orcAtual.idx].numRevisao=revNum;
   data[orcAtual.idx].totalFinal=totalFinal.toFixed(2);

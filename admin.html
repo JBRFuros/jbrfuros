@@ -6,6 +6,7 @@
 <title>JBR Furos – Painel Administrativo</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
   import { getFirestore, collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
@@ -142,7 +143,7 @@ nav{background:#2D3A39;height:60px;display:flex;align-items:center;justify-conte
 .container{max-width:1200px;margin:0 auto;padding:2rem;}
 
 /* STATS */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem;}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:1rem;margin-bottom:2rem;}
 .stat-card{background:#fff;border-radius:10px;border:.5px solid rgba(45,58,57,.12);padding:1.25rem;}
 .stat-label{font-size:11px;color:#888;letter-spacing:.5px;text-transform:uppercase;margin-bottom:.4rem;}
 .stat-val{font-family:'Bebas Neue',sans-serif;font-size:28px;color:#2D3A39;letter-spacing:1px;}
@@ -260,6 +261,7 @@ td{padding:11px 14px;font-size:12px;color:#333;}
 
     <div class="tab-nav">
       <button class="tab-btn active" onclick="switchTab('orcamentos',this)">Orçamentos</button>
+      <button class="tab-btn" onclick="switchTab('novo-orcamento',this)">Novo Orçamento</button>
       <button class="tab-btn" onclick="switchTab('contratos',this)">Contratos</button>
       <button class="tab-btn" onclick="switchTab('operadores',this)">Operadores</button>
       <button class="tab-btn" onclick="switchTab('emails',this)">Banco de E-mails</button>
@@ -268,6 +270,24 @@ td{padding:11px 14px;font-size:12px;color:#333;}
     <!-- ORÇAMENTOS -->
     <div class="tab-content show" id="tab-orcamentos">
       <div class="stats" id="stats-bar"></div>
+
+      <div class="card-panel" style="background:#fff;border-radius:12px;padding:16px 18px;margin-bottom:16px;">
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button class="action-btn" id="btn-view-mensal" onclick="mostrarVisaoDashboard('mensal')" style="border:2px solid #C95227;">Acompanhamento mensal</button>
+          <button class="action-btn" id="btn-view-anual" onclick="mostrarVisaoDashboard('anual')">Acumulado anual</button>
+        </div>
+
+        <div id="view-dash-mensal">
+          <div style="position:relative;width:100%;height:240px;">
+            <canvas id="chartDashMensal" role="img" aria-label="Gráfico de barras com volume mensal aberto, fechado e perdido"></canvas>
+          </div>
+        </div>
+        <div id="view-dash-anual" style="display:none;">
+          <div style="position:relative;width:100%;height:240px;">
+            <canvas id="chartDashAnual" role="img" aria-label="Gráfico de linha com volume fechado e perdido acumulado no ano"></canvas>
+          </div>
+        </div>
+      </div>
 
       <div class="filters">
         <label>Buscar:</label>
@@ -309,6 +329,76 @@ td{padding:11px 14px;font-size:12px;color:#333;}
           Nenhum orçamento encontrado.
         </div>
       </div>
+    </div>
+
+    <!-- NOVO ORÇAMENTO (criado direto pelo admin) -->
+    <div class="tab-content" id="tab-novo-orcamento">
+      <h2 class="title" style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#C95227;margin-bottom:4px;">Gerar orçamento manualmente</h2>
+      <p style="font-size:12px;color:#888;margin-bottom:16px;">Para clientes que entraram em contato direto (telefone, WhatsApp, e-mail), sem passar pelo formulário público do site.</p>
+
+      <div class="card-panel" style="background:#fff;border-radius:12px;padding:18px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:600;color:#C95227;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;border-bottom:2px solid #f0ebe3;padding-bottom:6px;">Dados do cliente</div>
+        <div class="filters" style="margin-bottom:8px;">
+          <input type="text" id="no-nome" placeholder="Nome completo" style="flex:1;min-width:180px;"/>
+          <input type="text" id="no-telefone" placeholder="Telefone / WhatsApp" style="flex:1;min-width:150px;"/>
+        </div>
+        <div class="filters" style="margin-bottom:8px;">
+          <input type="text" id="no-empresa" placeholder="Empresa" style="flex:1;min-width:180px;"/>
+          <input type="text" id="no-cnpj" placeholder="CNPJ" style="flex:1;min-width:150px;"/>
+        </div>
+        <div class="filters" style="margin-bottom:8px;">
+          <input type="email" id="no-email" placeholder="E-mail" style="flex:1;min-width:180px;"/>
+          <input type="text" id="no-municipio" placeholder="Município da obra" style="flex:1;min-width:150px;"/>
+        </div>
+        <div class="filters" style="margin-bottom:8px;">
+          <input type="text" id="no-endereco" placeholder="Endereço / referência" style="flex:1;min-width:180px;"/>
+          <input type="date" id="no-data-inicio" style="flex:1;min-width:150px;"/>
+        </div>
+        <div class="filters">
+          <select id="no-estrutura" style="flex:1;min-width:180px;">
+            <option value="Piso/Laje">Piso / Laje</option>
+            <option value="Viga/Pilar/Parede">Viga / Pilar / Parede</option>
+            <option value="Misto">Misto</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card-panel" style="background:#fff;border-radius:12px;padding:18px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:600;color:#C95227;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;border-bottom:2px solid #f0ebe3;padding-bottom:6px;">Adicionar furos</div>
+        <div class="filters" style="margin-bottom:10px;">
+          <select id="no-diam" style="flex:1;min-width:170px;">
+            <option value="1">1 1/4 (31,75 mm)</option>
+            <option value="2">2 1/4 (57,15 mm)</option>
+            <option value="3">3 1/4 (82,55 mm)</option>
+            <option value="4" selected>4 1/4 (107,95 mm)</option>
+            <option value="5">5 1/4 (133,35 mm)</option>
+            <option value="6">6 1/4 (158,75 mm)</option>
+            <option value="7">7 1/4 (184,15 mm)</option>
+            <option value="8">8 1/4 (209,55 mm)</option>
+            <option value="9">10 1/4 (260,35 mm)</option>
+          </select>
+          <input type="number" id="no-prof" placeholder="Profundidade (cm)" min="1" style="flex:1;min-width:140px;"/>
+          <input type="number" id="no-qtd" placeholder="Quantidade" min="1" value="1" style="flex:1;min-width:110px;"/>
+          <select id="no-tipo" style="flex:1;min-width:140px;">
+            <option value="piso">Piso / Laje</option>
+            <option value="viga">Viga / Pilar / Parede</option>
+          </select>
+          <button class="btn-enviar" style="background:#0A6B3B;" onclick="adicionarFuroAdmin()">+ Adicionar furo</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Diâmetro</th><th>Tipo</th><th>Prof.</th><th>Qtd</th><th>Subtotal</th><th></th></tr></thead>
+            <tbody id="no-itens-body"></tbody>
+          </table>
+          <div class="empty-state" id="no-empty-state">
+            <i class="ti ti-list" aria-hidden="true"></i>
+            Nenhum furo adicionado ainda.
+          </div>
+        </div>
+        <div id="no-resumo" style="margin-top:14px;"></div>
+      </div>
+
+      <button class="btn-enviar-visita" style="width:100%;background:#C95227;color:#fff;border:none;padding:16px;border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;cursor:pointer;" onclick="gerarOrcamentoManual()">Gerar orçamento e baixar PDF</button>
     </div>
 
     <!-- CONTRATOS -->
@@ -522,6 +612,19 @@ const SENHA_USER='jbr';
 const SENHA_PASS='jbr@2026';
 let orcAtual=null;
 
+const TABELA_ADMIN={
+  1:{nome:'1 1/4 (31,75 mm)',piso:1.90,viga:2.47},
+  2:{nome:'2 1/4 (57,15 mm)',piso:2.10,viga:2.73},
+  3:{nome:'3 1/4 (82,55 mm)',piso:2.30,viga:2.99},
+  4:{nome:'4 1/4 (107,95 mm)',piso:2.60,viga:3.38},
+  5:{nome:'5 1/4 (133,35 mm)',piso:2.90,viga:3.77},
+  6:{nome:'6 1/4 (158,75 mm)',piso:3.30,viga:4.29},
+  7:{nome:'7 1/4 (184,15 mm)',piso:3.80,viga:4.94},
+  8:{nome:'8 1/4 (209,55 mm)',piso:5.00,viga:6.50},
+  9:{nome:'10 1/4 (260,35 mm)',piso:9.00,viga:11.70}
+};
+let itensAdmin=[];
+
 function doLogin(){
   const u=document.getElementById('login-user').value.trim();
   const p=document.getElementById('login-pass').value;
@@ -612,17 +715,83 @@ function fmt(v){return 'R$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFracti
 function renderStats(){
   const data=getOrcamentos();
   const total=data.reduce((s,o)=>s+parseFloat(o.total||0),0);
-  const comDesc=data.filter(o=>parseFloat(o.desconto||0)>0).length;
   const volumeFechado=data.filter(o=>o.status==='aprovado').reduce((s,o)=>s+parseFloat(o.totalFinal||o.total||0),0);
   const volumePerdido=data.filter(o=>o.status==='recusado').reduce((s,o)=>s+parseFloat(o.totalFinal||o.total||0),0);
+  const volumeAberto=data.filter(o=>o.status!=='aprovado'&&o.status!=='recusado').reduce((s,o)=>s+parseFloat(o.totalFinal||o.total||0),0);
   document.getElementById('stats-bar').innerHTML=`
     <div class="stat-card"><div class="stat-label">Total de orçamentos</div><div class="stat-val">${data.length}</div></div>
     <div class="stat-card"><div class="stat-label">Volume total orçado</div><div class="stat-val orange">${fmt(total)}</div></div>
     <div class="stat-card"><div class="stat-label">Volume total fechado</div><div class="stat-val" style="color:#0A6B3B;">${fmt(volumeFechado)}</div></div>
     <div class="stat-card"><div class="stat-label">Volume total perdido</div><div class="stat-val" style="color:#A32D2D;">${fmt(volumePerdido)}</div></div>
-    <div class="stat-card"><div class="stat-label">Com desconto</div><div class="stat-val">${comDesc}</div></div>
-    <div class="stat-card"><div class="stat-label">E-mails cadastrados</div><div class="stat-val">${[...new Set(data.map(o=>o.email))].length}</div></div>
+    <div class="stat-card"><div class="stat-label">Volume total em aberto</div><div class="stat-val" style="color:#185FA5;">${fmt(volumeAberto)}</div></div>
   `;
+  renderDashboardPropostas(data);
+}
+
+let chartDashMensal=null,chartDashAnual=null;
+
+function parseDataBR(str){
+  if(!str)return null;
+  const [d,m,y]=str.split('/');
+  if(!d||!m||!y)return null;
+  return new Date(parseInt(y),parseInt(m)-1,parseInt(d));
+}
+
+function renderDashboardPropostas(data){
+  const canvasM=document.getElementById('chartDashMensal');
+  if(!canvasM)return;
+
+  const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const buckets={};
+  data.forEach(o=>{
+    const d=parseDataBR(o.data);
+    if(!d)return;
+    const key=d.getFullYear()+'-'+String(d.getMonth()).padStart(2,'0');
+    if(!buckets[key])buckets[key]={aberto:0,fechado:0,perdido:0,label:meses[d.getMonth()]+'/'+String(d.getFullYear()).slice(2)};
+    const valor=parseFloat(o.totalFinal||o.total||0);
+    if(o.status==='aprovado')buckets[key].fechado+=valor;
+    else if(o.status==='recusado')buckets[key].perdido+=valor;
+    else buckets[key].aberto+=valor;
+  });
+  const keysOrdenadas=Object.keys(buckets).sort();
+  const labels=keysOrdenadas.map(k=>buckets[k].label);
+  const aberto=keysOrdenadas.map(k=>buckets[k].aberto);
+  const fechado=keysOrdenadas.map(k=>buckets[k].fechado);
+  const perdido=keysOrdenadas.map(k=>buckets[k].perdido);
+
+  if(chartDashMensal)chartDashMensal.destroy();
+  chartDashMensal=new Chart(canvasM,{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Aberto',data:aberto,backgroundColor:'#2a78d6',borderRadius:4},
+      {label:'Fechado',data:fechado,backgroundColor:'#199e70',borderRadius:4},
+      {label:'Perdido',data:perdido,backgroundColor:'#e34948',borderRadius:4}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{ticks:{callback:v=>fmt(v)}},x:{grid:{display:false}}}}
+  });
+
+  function acumular(arr){let s=0;return arr.map(v=>s+=v);}
+  const canvasA=document.getElementById('chartDashAnual');
+  if(chartDashAnual)chartDashAnual.destroy();
+  chartDashAnual=new Chart(canvasA,{
+    type:'line',
+    data:{labels,datasets:[
+      {label:'Fechado acumulado',data:acumular(fechado),borderColor:'#199e70',backgroundColor:'rgba(25,158,112,0.1)',fill:true,tension:0.3,pointRadius:3},
+      {label:'Perdido acumulado',data:acumular(perdido),borderColor:'#e34948',backgroundColor:'rgba(227,73,72,0.1)',fill:true,tension:0.3,pointRadius:3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{ticks:{callback:v=>fmt(v)}},x:{grid:{display:false}}}}
+  });
+}
+
+function mostrarVisaoDashboard(v){
+  document.getElementById('view-dash-mensal').style.display=v==='mensal'?'block':'none';
+  document.getElementById('view-dash-anual').style.display=v==='anual'?'block':'none';
+  document.getElementById('btn-view-mensal').style.border=v==='mensal'?'2px solid #C95227':'1px solid #ddd';
+  document.getElementById('btn-view-anual').style.border=v==='anual'?'2px solid #C95227':'1px solid #ddd';
 }
 
 function renderTabela(){
@@ -638,10 +807,11 @@ function renderTabela(){
   });
   if(filtered.length===0){tbody.innerHTML='';empty.style.display='block';return;}
   empty.style.display='none';
-  const statusBadge=(s)=>{
+  const statusBadge=(s,rev)=>{
     const map={gerado:'badge-gerado',revisado:'badge-revisado',enviado:'badge-enviado',aprovado:'badge-aprovado',recusado:'badge-recusado'};
     const label={gerado:'Gerado',revisado:'Revisado',enviado:'Enviado',aprovado:'Aprovado',recusado:'Obra Perdida'};
-    return `<span class="badge-status ${map[s]||'badge-gerado'}">${label[s]||'Gerado'}</span>`;
+    const revTxt=rev?` <span style="font-weight:400;opacity:.75;">· REV ${rev}</span>`:'';
+    return `<span class="badge-status ${map[s]||'badge-gerado'}">${label[s]||'Gerado'}${revTxt}</span>`;
   };
   tbody.innerHTML=filtered.reverse().map((o,i)=>{
     const desc=parseFloat(o.desconto||0);
@@ -657,7 +827,7 @@ function renderTabela(){
       <td>${fmt(o.total||0)}</td>
       <td>${desc>0?`<span style="color:#C95227;font-weight:600;">${o.descontoTipo==='percent'?desc+'%':fmt(desc)}</span>`:'<span style="color:#ccc;">—</span>'}</td>
       <td style="font-weight:700;color:#2D3A39;">${fmt(totalFinal)}</td>
-      <td>${statusBadge(o.status||'gerado')}</td>
+      <td>${statusBadge(o.status||'gerado',o.numRevisao)}</td>
       <td style="display:flex;gap:5px;">
         <button class="action-btn orange" onclick="abrirModal(${data.indexOf(o)})">✎ Revisar</button>
         <button class="action-btn" style="color:#A32D2D;border-color:rgba(163,45,45,.3);" onclick="excluirOrcamento(${data.indexOf(o)})">🗑</button>
@@ -881,6 +1051,224 @@ async function resetarSenhaOperador(email){
   }
 }
 
+function adicionarFuroAdmin(){
+  const diam=document.getElementById('no-diam').value;
+  const prof=parseFloat(document.getElementById('no-prof').value);
+  const qtd=parseInt(document.getElementById('no-qtd').value);
+  const tipo=document.getElementById('no-tipo').value;
+  if(!prof||prof<=0){alert('Informe a profundidade do furo.');return;}
+  if(!qtd||qtd<=0){alert('Informe a quantidade de furos.');return;}
+  const info=TABELA_ADMIN[diam];
+  itensAdmin.push({diam,nome:info.nome,tipo,prof,qtd,preco:tipo==='piso'?info.piso:info.viga});
+  document.getElementById('no-prof').value='';
+  document.getElementById('no-qtd').value='1';
+  renderItensAdmin();
+}
+
+function removerFuroAdmin(i){
+  itensAdmin.splice(i,1);
+  renderItensAdmin();
+}
+
+function calcularAdmin(){
+  let subtotalFuros=0,totalFuros=0;
+  itensAdmin.forEach(it=>{totalFuros+=it.qtd;subtotalFuros+=it.qtd*it.prof*it.preco;});
+  const visitas=Math.ceil(totalFuros/8);
+  let mobilizacao=0,taxaMinima=0;
+  if(totalFuros>0&&totalFuros<=8){taxaMinima=1200;}
+  else if(totalFuros>8){mobilizacao=visitas*800;}
+  const total=subtotalFuros+mobilizacao+taxaMinima;
+  return{subtotalFuros,mobilizacao,taxaMinima,total,totalFuros,visitas};
+}
+
+function renderItensAdmin(){
+  const tbody=document.getElementById('no-itens-body');
+  const empty=document.getElementById('no-empty-state');
+  const resumo=document.getElementById('no-resumo');
+  if(itensAdmin.length===0){
+    tbody.innerHTML='';empty.style.display='block';resumo.innerHTML='';return;
+  }
+  empty.style.display='none';
+  tbody.innerHTML=itensAdmin.map((it,i)=>{
+    const sub=it.qtd*it.prof*it.preco;
+    return `<tr>
+      <td>${it.nome}</td>
+      <td>${it.tipo==='piso'?'Piso/Laje':'Viga/Pilar'}</td>
+      <td>${it.prof} cm</td>
+      <td>${it.qtd}</td>
+      <td>${fmt(sub)}</td>
+      <td><button class="action-btn" onclick="removerFuroAdmin(${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+  const c=calcularAdmin();
+  let html=`<div class="rrow"><span>Subtotal furos (${c.totalFuros} furo${c.totalFuros>1?'s':''})</span><span class="rval">${fmt(c.subtotalFuros)}</span></div>`;
+  if(c.mobilizacao>0)html+=`<div class="rrow"><span>Mobilização (${c.visitas} visita${c.visitas>1?'s':''})</span><span class="rval">${fmt(c.mobilizacao)}</span></div>`;
+  if(c.taxaMinima>0)html+=`<div class="rrow"><span>Taxa de visita</span><span class="rval">${fmt(c.taxaMinima)}</span></div>`;
+  html+=`<div class="rrow total"><span>Total estimado</span><span class="rval">${fmt(c.total)}</span></div>`;
+  resumo.innerHTML=html;
+}
+
+async function gerarOrcamentoManual(){
+  const nome=document.getElementById('no-nome').value.trim();
+  const telefone=document.getElementById('no-telefone').value.trim();
+  const empresa=document.getElementById('no-empresa').value.trim();
+  const cnpj=document.getElementById('no-cnpj').value.trim();
+  const email=document.getElementById('no-email').value.trim();
+  const municipio=document.getElementById('no-municipio').value.trim();
+  const local=document.getElementById('no-endereco').value.trim();
+  const dataInicioRaw=document.getElementById('no-data-inicio').value;
+  const estrutura=document.getElementById('no-estrutura').value;
+
+  if(!nome||!empresa||!email){alert('Preencha ao menos Nome, Empresa e E-mail.');return;}
+  if(itensAdmin.length===0){alert('Adicione ao menos um furo.');return;}
+
+  const c=calcularAdmin();
+  const hoje=new Date();
+  const numOrc='ORC-'+hoje.getFullYear()+String(hoje.getMonth()+1).padStart(2,'0')+String(hoje.getDate()).padStart(2,'0')+'-'+Math.floor(1000+Math.random()*9000);
+  const dataInicioFmt=dataInicioRaw?dataInicioRaw.split('-').reverse().join('/'):'A definir';
+
+  const entry={
+    id:numOrc,email,nome,empresa,cnpj,telefone,municipio,local,estrutura,
+    dataInicio:dataInicioFmt,
+    itens:itensAdmin.map(it=>({diam:it.diam,nome:it.nome,tipo:it.tipo,prof:it.prof,qtd:it.qtd,preco:it.preco})),
+    totalFuros:c.totalFuros,visitas:c.visitas,
+    total:c.total,
+    status:'gerado',
+    origem:'admin',
+    data:hoje.toLocaleDateString('pt-BR'),
+    hora:hoje.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})
+  };
+
+  if(window._fbAddDoc&&window._fbDb){
+    try{
+      const ref=await window._fbAddDoc(window._fbCollection(window._fbDb,'orcamentos'),entry);
+      entry._docId=ref.id;
+    }catch(e){console.error('Erro ao salvar orçamento manual no Firestore:',e);}
+  }
+  const dataLocal=getOrcamentos();
+  dataLocal.unshift(entry);
+  localStorage.setItem('jbr_emails',JSON.stringify(dataLocal));
+
+  gerarPDFOrcamentoManual(entry,c);
+
+  itensAdmin=[];
+  document.getElementById('no-nome').value='';
+  document.getElementById('no-telefone').value='';
+  document.getElementById('no-empresa').value='';
+  document.getElementById('no-cnpj').value='';
+  document.getElementById('no-email').value='';
+  document.getElementById('no-municipio').value='';
+  document.getElementById('no-endereco').value='';
+  document.getElementById('no-data-inicio').value='';
+  renderItensAdmin();
+  renderStats();renderTabela();
+
+  alert('Orçamento '+numOrc+' gerado e salvo com sucesso!');
+}
+
+function gerarPDFOrcamentoManual(o,c){
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const cor1=[45,58,57];const corOr=[201,82,39];const creme=[229,222,212];
+  const hoje=new Date();
+  const dataStr=hoje.toLocaleDateString('pt-BR');
+  const validade=new Date(hoje.getTime()+15*86400000).toLocaleDateString('pt-BR');
+
+  doc.setFillColor(...cor1);doc.rect(0,0,210,28,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(201,82,39);doc.text('JBR FUROS',14,12);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(229,222,212);doc.text('CONCRETE DRILLING',14,17);
+  doc.setFontSize(8);doc.setTextColor(180,178,169);
+  doc.text('Av. Otavio Braga de Mesquita, 751 – Guarulhos – SP',14,23);
+  doc.text('Tel: (11) 96630-3028  |  contato@jbrfuros.com.br',14,27);
+
+  doc.setFontSize(16);doc.setFont('helvetica','bold');doc.setTextColor(...corOr);
+  doc.text('PROPOSTA TÉCNICA COMERCIAL',14,42);
+  doc.setDrawColor(...corOr);doc.setLineWidth(0.5);doc.line(14,44,196,44);
+
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(...cor1);
+  doc.text('Nº Orçamento: '+o.id,14,52);
+  doc.text('Data: '+dataStr,140,52);doc.text('Validade: '+validade,140,57);
+
+  doc.setFillColor(241,239,232);doc.rect(14,60,182,28,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...cor1);
+  doc.text('A/C: '+(o.empresa||'')+' – '+(o.nome||''),18,68);
+  doc.setFont('helvetica','normal');
+  doc.text('Município: '+(o.municipio||'')+(o.local?' – '+o.local:''),18,74);
+  doc.text('E-mail: '+(o.email||''),18,80);
+  doc.text('Ref: Proposta Comercial para execução de furos em concreto armado – '+(o.estrutura||''),18,86,{maxWidth:174});
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('1 – Escopo',14,98);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...cor1);
+  doc.text('Ref.: Proposta Comercial para execução de furos em concreto armado – '+(o.estrutura||'')+(o.local?' – '+o.local:'')+(o.municipio?' – '+o.municipio:''),14,104,{maxWidth:182});
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('2 – Método executivo',14,114);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...cor1);
+  doc.text('Os furos serão realizados com perfuratriz Husqvarna e brocas diamantadas, conforme diâmetros solicitados.',14,120,{maxWidth:182});
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('3 – Custos',14,130);
+
+  const thead=[['Item','Ø Furo','Tipo','Prof.','Qtd','Unit/cm','Total']];
+  const tbody_rows=o.itens.map((it,i)=>{const sub=it.qtd*it.prof*it.preco;return[(i+1).toString(),it.nome,it.tipo==='piso'?'Piso':'Viga/Pilar',it.prof+' cm',it.qtd.toString(),'R$ '+it.preco.toFixed(2).replace('.',','),'R$ '+sub.toFixed(2).replace('.',',')];});
+  if(c.mobilizacao>0)tbody_rows.push(['','Mobilização ('+c.visitas+'x R$ 800,00)','','','','','R$ '+c.mobilizacao.toFixed(2).replace('.',',')]);
+  if(c.taxaMinima>0)tbody_rows.push(['','Taxa de visita','','','','','R$ '+c.taxaMinima.toFixed(2).replace('.',',')]);
+  tbody_rows.push(['','','','','','TOTAL','R$ '+c.total.toFixed(2).replace('.',',')]);
+
+  doc.autoTable({startY:134,head:thead,body:tbody_rows,theme:'grid',
+    headStyles:{fillColor:cor1,textColor:creme,fontSize:8,fontStyle:'bold'},
+    bodyStyles:{fontSize:8,textColor:cor1},alternateRowStyles:{fillColor:[248,246,243]},
+    columnStyles:{0:{cellWidth:10},6:{fontStyle:'bold'}},margin:{left:14,right:14}});
+
+  let y=doc.lastAutoTable.finalY+8;
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('4 – Prazos',14,y);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...cor1);
+  doc.text('Previsão de início solicitada: '+(o.dataInicio||'A definir'),14,y+6);
+  doc.text('Início efetivo: A confirmar conforme disponibilidade – consultar agenda.',14,y+12);
+  doc.text('Execução: '+c.visitas+' dia'+(c.visitas>1?'s':'')+' ('+c.totalFuros+' furos ÷ 8 furos/dia = '+c.visitas+' visita'+(c.visitas>1?'s':'')+').',14,y+18);
+  y+=26;
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('5 – Responsabilidades do contratante',14,y);
+  const resp=['Demarcação dos serviços a serem executados com antecedência dos furos e cortes.','Área de trabalho livre e desimpedida, com serviço necessário para não paralisação da equipe.','Iluminação adequada dos locais dos serviços.','Local seguro para guardar os equipamentos (quando necessário).','Fornecer ponto de água até 25m com vazão mínima de 10L/min.','Fornecer ponto de energia elétrica 220v monofásica a 25m do local de execução.','Escoramentos, andaimes, retirada de entulho e limpeza por conta da contratante.','Furos em pontos com interferência serão contabilizados por cm perfurado.','A locação dos furos é responsabilidade do contratante — posicionamento pode afetar a integridade da estrutura.'];
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...cor1);
+  resp.forEach((r,i)=>{doc.text('• '+r,16,y+6+(i*5),{maxWidth:178});});
+  y+=54;
+
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('6 – Considerações gerais',14,y);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...cor1);
+  ['Integrações >3h ou em datas distintas serão cobradas. (R$ 1.200,00/dia)','Paralisações por falta de marcação, energia ou acesso: cobrança de horas paradas. (R$ 180,00/h)','Documentação médica específica da obra cobrada separadamente. (R$ 2.500,00)'].forEach((r,i)=>{doc.text('• '+r,16,y+6+(i*5));});
+  y+=26;
+
+  if(y>250){doc.addPage();y=20;}
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('7 – Validade da proposta',14,y);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...cor1);
+  doc.text('A presente proposta é válida por 15 dias (até '+validade+').',14,y+6);
+  y+=20;
+
+  if(y>250){doc.addPage();y=20;}
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...corOr);doc.text('8 – Valores e condições',14,y);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...cor1);
+  doc.text('Valor total dos serviços: R$ '+c.total.toFixed(2).replace('.',','),14,y+6);
+  doc.text('NF emitida pós aceite do responsável. Faturamento em 15 DDL.',14,y+12);
+  y+=26;
+
+  if(y>260){doc.addPage();y=20;}
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...cor1);
+  doc.text('À disposição para maiores esclarecimentos. Atenciosamente,',14,y);
+  doc.setFont('helvetica','bold');doc.text('Robson Morais – Engº Civil – CREA 5063927075',14,y+12);
+
+  doc.setFillColor(...cor1);doc.rect(0,282,210,15,'F');
+  doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...creme);
+  doc.text('JBR Furos  |  Av. Otavio Braga de Mesquita, 751 – Guarulhos – SP  |  (11) 96630-3028  |  contato@jbrfuros.com.br',14,289);
+
+  const isMobileAdmin=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(isMobileAdmin){
+    const pdfUrl=doc.output('bloburl');
+    window.open(pdfUrl,'_blank');
+  } else {
+    doc.save('JBR_Furos_Orcamento_'+o.id+'.pdf');
+  }
+}
+
 function renderEmails(){
   const data=getOrcamentos();
   const busca=(document.getElementById('busca-email').value||'').toLowerCase();
@@ -907,7 +1295,7 @@ function abrirModal(idx){
   const data=getOrcamentos();
   orcAtual={entry:data[idx],idx};
   const o=data[idx];
-  document.getElementById('modal-title').textContent='Revisar: '+(o.id||'Orçamento');
+  document.getElementById('modal-title').textContent='Revisar: '+(o.id||'Orçamento')+(o.numRevisao?' (REV '+o.numRevisao+')':'');
   document.getElementById('modal-info').innerHTML=`
     <div class="info-item"><div class="info-label">Empresa</div><div class="info-val">${o.empresa||'—'}</div></div>
     <div class="info-item"><div class="info-label">CNPJ</div><div class="info-val">${o.cnpj||'—'}</div></div>
@@ -1075,12 +1463,12 @@ function gerarPDFAdmin(){
   itens.forEach(it=>{subtotalFuros+=it.qtd*it.prof*it.preco;totalFurosN+=it.qtd;});
   const visitas=Math.ceil(totalFurosN/8);
   let mob=0,taxMin=0;
-  if(totalFurosN>0&&totalFurosN<=8){if(subtotalFuros<1200)taxMin=1200-subtotalFuros;}
+  if(totalFurosN>0&&totalFurosN<=8){taxMin=1200;}
   else if(totalFurosN>8){mob=visitas*800;}
 
   const tbody_rows=itens.map((it,i)=>{const sub=it.qtd*it.prof*it.preco;return[(i+1).toString(),it.nome,it.tipo==='piso'?'Piso':'Viga/Pilar',it.prof+' cm',it.qtd.toString(),'R$ '+it.preco.toFixed(2).replace('.',','),'R$ '+sub.toFixed(2).replace('.',',')];});
   if(mob>0)tbody_rows.push(['','Mobilização ('+visitas+'x R$ 800,00)','','','','','R$ '+mob.toFixed(2).replace('.',',')]);
-  if(taxMin>0)tbody_rows.push(['','Taxa mínima (complemento)','','','','','R$ '+taxMin.toFixed(2).replace('.',',')]);
+  if(taxMin>0)tbody_rows.push(['','Taxa de visita','','','','','R$ '+taxMin.toFixed(2).replace('.',',')]);
   tbody_rows.push(['','','','','','Sub-total original','R$ '+totalOrig.toFixed(2).replace('.',',')]);
   if(descValor>0){
     const descLabel=saved.tipo==='percent'?'Desconto ('+saved.val+'%)':'Desconto comercial';
